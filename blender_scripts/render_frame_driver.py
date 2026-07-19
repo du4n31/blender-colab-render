@@ -134,9 +134,13 @@ def _configure_output_mode(mode: str) -> None:
     if mode == "compositor":
         scene.render.use_compositing = True
         scene.render.use_sequencer = False
+        # IMPORTANTE: En background mode, el node tree del compositor
+        # solo existe si use_nodes = True
+        scene.use_nodes = True
     elif mode == "sequencer":
         scene.render.use_compositing = False
         scene.render.use_sequencer = True
+        scene.use_nodes = False
     else:
         print(
             f"[driver] Modo de salida desconocido '{mode}', "
@@ -144,6 +148,7 @@ def _configure_output_mode(mode: str) -> None:
         )
         scene.render.use_compositing = True
         scene.render.use_sequencer = False
+        scene.use_nodes = True
 
 
 def _remap_file_output_nodes(
@@ -187,6 +192,12 @@ def _remap_file_output_nodes(
     node_tree = getattr(scene, "node_tree", None)
     if node_tree is None:
         print(f"[driver] No hay node_tree en la escena, no se remapean File Outputs")
+        scene.render.filepath = original_filepath
+        return
+
+    # Asegurar que el node tree tiene nodos (puede estar vacio)
+    if not node_tree.nodes:
+        print(f"[driver] Node tree vacio, no se remapean File Outputs")
         scene.render.filepath = original_filepath
         return
 

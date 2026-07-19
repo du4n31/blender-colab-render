@@ -47,18 +47,20 @@ def upload_frame(
     drive_output_dir: Path,
     frame_num: int,
     subdir: str = "",
+    preserve_name: bool = True,
 ) -> Path:
     """Copia un frame renderizado desde la instancia a Drive.
 
-    El archivo se nombra como frame_%06d.png en el directorio de salida.
-    Si se especifica subdir, se crea un subdirectorio para organizar
-    multiples salidas (ej: nodos File Output).
+    Si preserve_name=True (default), usa el nombre original del archivo
+    para evitar colisiones cuando hay multiples salidas por frame.
+    Si preserve_name=False, usa el patron frame_%06d.ext (compatibilidad).
 
     Args:
         local_path: Ruta al archivo local del frame renderizado.
         drive_output_dir: Directorio de salida en Drive.
-        frame_num: Numero de frame (para nombrar el archivo).
+        frame_num: Numero de frame (para naming fallback).
         subdir: Subdirectorio opcional (ej: nombre del nodo).
+        preserve_name: Si True, preserva el nombre original del archivo.
 
     Returns:
         Path al archivo en Drive.
@@ -73,9 +75,14 @@ def upload_frame(
         msg = f"El archivo local no existe: {local_path}"
         raise DriveSyncError(msg)
 
-    # Preservar la extension original del archivo (.exr, .png, etc.)
-    suffix = local_path.suffix if local_path.suffix else ".png"
-    dest_filename = f"frame_{frame_num:06d}{suffix}"
+    # Determinar nombre de destino
+    if preserve_name:
+        # Usar nombre original para evitar colisiones
+        dest_filename = local_path.name
+    else:
+        # Fallback: patron frame_NNNNNN.ext
+        suffix = local_path.suffix if local_path.suffix else ".png"
+        dest_filename = f"frame_{frame_num:06d}{suffix}"
 
     if subdir:
         dest_dir = drive_output_dir / subdir

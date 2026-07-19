@@ -174,7 +174,7 @@ class RenderOrchestrator:
                     frame_num, local_path = result
 
                     # Validar que la ruta esta bajo nuestro output_dir (filtra
-                    # paths Windows como C:\\Users\\... que Blender imprime
+                    # paths Windows como C:\Users\... que Blender imprime
                     # si los File Output nodes no fueron remapeados).
                     if not self._is_valid_output_path(local_path):
                         continue
@@ -278,7 +278,7 @@ class RenderOrchestrator:
     def _is_valid_output_path(self, path: Path) -> bool:
         """Valida que la ruta este bajo nuestro directorio de salida controlado.
 
-        Descarta rutas Windows (C:\\...), rutas arbitrarias fuera de
+        Descarta rutas Windows (C:\...), rutas arbitrarias fuera de
         /content/render_tmp, etc. que Blender podria imprimir si los
         File Output nodes no fueron remapeados correctamente.
         """

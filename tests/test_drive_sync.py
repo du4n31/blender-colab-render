@@ -19,25 +19,26 @@ from bcr.drive_sync import (
 class TestUploadFrame:
     """Prueba upload_frame con y sin subdirectorio."""
 
-    def test_upload_basic(self, tmp_drive_dir: Path, tmp_path: Path):
-        """Subida basica: archivo se copia al directorio raiz."""
-        src = tmp_path / "frame_00001.png"
-        src.write_text("fake-png")
+    def test_upload_basic_preserves_name(self, tmp_drive_dir: Path, tmp_path: Path):
+        """Subida basica: archivo se copia con su nombre original."""
+        src = tmp_path / "beauty_0001.exr"
+        src.write_text("fake-exr")
         result = upload_frame(src, tmp_drive_dir, frame_num=1)
-        assert result == tmp_drive_dir / "frame_000001.png"
+        # Con preserve_name=True (default), usa el nombre original
+        assert result == tmp_drive_dir / "beauty_0001.exr"
         assert result.exists()
 
-    def test_upload_with_subdir(self, tmp_drive_dir: Path, tmp_path: Path):
-        """Subida con subdir: archivo se copia a subdirectorio."""
+    def test_upload_with_subdir_preserves_name(self, tmp_drive_dir: Path, tmp_path: Path):
+        """Subida con subdir: archivo se copia a subdirectorio con nombre original."""
         src = tmp_path / "beauty_0001.exr"
         src.write_text("fake-exr")
         result = upload_frame(src, tmp_drive_dir, frame_num=1, subdir="Temp")
-        expected = tmp_drive_dir / "Temp" / "frame_000001.exr"
+        expected = tmp_drive_dir / "Temp" / "beauty_0001.exr"
         assert result == expected
         assert result.exists()
 
-    def test_upload_multiple_subdirs(self, tmp_drive_dir: Path, tmp_path: Path):
-        """Multiples archivos mismo frame -> distintos subdirectorios."""
+    def test_upload_multiple_subdirs_no_collision(self, tmp_drive_dir: Path, tmp_path: Path):
+        """Multiples archivos mismo frame -> distintos subdirectorios, sin sobrescribir."""
         src1 = tmp_path / "beauty_0001.exr"
         src1.write_text("beauty-data")
         src2 = tmp_path / "depth_0001.exr"
@@ -46,8 +47,8 @@ class TestUploadFrame:
         r1 = upload_frame(src1, tmp_drive_dir, frame_num=1, subdir="beauty")
         r2 = upload_frame(src2, tmp_drive_dir, frame_num=1, subdir="depth")
 
-        assert r1 == tmp_drive_dir / "beauty" / "frame_000001.exr"
-        assert r2 == tmp_drive_dir / "depth" / "frame_000001.exr"
+        assert r1 == tmp_drive_dir / "beauty" / "beauty_0001.exr"
+        assert r2 == tmp_drive_dir / "depth" / "depth_0001.exr"
         assert r1.exists()
         assert r2.exists()
         assert r1.read_text() == "beauty-data"
@@ -65,13 +66,21 @@ class TestUploadFrame:
         src.write_text("exr-data")
         result = upload_frame(src, tmp_drive_dir, frame_num=42)
         assert result.suffix == ".exr"
+        assert result.name == "output.exr"
+
+    def test_fallback_frame_pattern_when_preserve_false(self, tmp_drive_dir: Path, tmp_path: Path):
+        """Con preserve_name=False usa patron frame_NNNNNN.ext."""
+        src = tmp_path / "output.exr"
+        src.write_text("exr-data")
+        result = upload_frame(src, tmp_drive_dir, frame_num=42, preserve_name=False)
+        assert result.suffix == ".exr"
         assert result.name == "frame_000042.exr"
 
-    def test_defaults_to_png(self, tmp_drive_dir: Path, tmp_path: Path):
-        """Archivo sin extension usa .png por defecto."""
+    def test_defaults_to_png_when_no_extension(self, tmp_drive_dir: Path, tmp_path: Path):
+        """Archivo sin extension usa .png por defecto (solo con preserve_name=False)."""
         src = tmp_path / "output"
         src.write_text("data")
-        result = upload_frame(src, tmp_drive_dir, frame_num=1)
+        result = upload_frame(src, tmp_drive_dir, frame_num=1, preserve_name=False)
         assert result.suffix == ".png"
         assert result.name == "frame_000001.png"
 
