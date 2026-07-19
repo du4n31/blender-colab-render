@@ -104,7 +104,7 @@ class TestReconcileWithFiles:
         assert result == 5
 
     def test_mixed_file_types(self, tmp_drive_dir: Path):
-        """Archivos que no son frame_*.png se ignoran."""
+        """Archivos que no son frame_* se ignoran."""
         (tmp_drive_dir / "frame_000001.png").touch()
         (tmp_drive_dir / "frame_000003.png").touch()
         (tmp_drive_dir / "README.txt").touch()
@@ -112,9 +112,19 @@ class TestReconcileWithFiles:
         result = reconcile_with_files(tmp_drive_dir, state_last_frame=10)
         assert result == 3
 
-    def test_no_png_files(self, tmp_drive_dir: Path):
-        """Sin archivos .png, devuelve 0 incluso si hay otros archivos."""
-        (tmp_drive_dir / "output.exr").touch()
+    def test_exr_files_detected(self, tmp_drive_dir: Path):
+        """Archivos .exr con nombre frame_* son detectados."""
+        (tmp_drive_dir / "frame_000001.exr").touch()
+        (tmp_drive_dir / "frame_000002.exr").touch()
         (tmp_drive_dir / "log.txt").touch()
-        result = reconcile_with_files(tmp_drive_dir, state_last_frame=5)
-        assert result == 0
+        result = reconcile_with_files(tmp_drive_dir, state_last_frame=10)
+        assert result == 2
+
+    def test_frames_in_subdirectories(self, tmp_drive_dir: Path):
+        """Frames en subdirectorios (organizados por nodo) son detectados."""
+        subdir = tmp_drive_dir / "Temp"
+        subdir.mkdir()
+        (subdir / "frame_000001.exr").touch()
+        (subdir / "frame_000002.exr").touch()
+        result = reconcile_with_files(tmp_drive_dir, state_last_frame=10)
+        assert result == 2

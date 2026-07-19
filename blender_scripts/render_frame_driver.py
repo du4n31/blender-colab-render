@@ -45,7 +45,7 @@ def main() -> None:
     _configure_output_mode(output_mode)
 
     # 3. Remapear nodos File Output a una ruta Linux valida
-    _remap_file_output_nodes(output_dir)
+    _remap_file_output_nodes(output_dir, output_mode)
 
     print(f"[driver] Dispositivo: {device}")
     print(f"[driver] Modo de salida: {output_mode}")
@@ -146,7 +146,10 @@ def _configure_output_mode(mode: str) -> None:
         scene.render.use_sequencer = False
 
 
-def _remap_file_output_nodes(output_dir: str = "/content/render_tmp") -> None:
+def _remap_file_output_nodes(
+    output_dir: str = "/content/render_tmp",
+    output_mode: str = "compositor",
+) -> None:
     """Remapea todos los nodos File Output del compositor a output_dir.
 
     Los .blend suelen tener rutas absolutas del sistema local del artista
@@ -159,10 +162,16 @@ def _remap_file_output_nodes(output_dir: str = "/content/render_tmp") -> None:
 
     Args:
         output_dir: Directorio base para los archivos de salida.
+        output_mode: Modo de salida ('compositor' o 'sequencer').
     """
     import bpy
 
     scene = bpy.context.scene
+
+    # En modo sequencer no hay nodos de compositor que remapear
+    if output_mode == "sequencer":
+        print("[driver] Modo sequencer: no se remapean File Output nodes")
+        return
 
     # Guardar la ruta original (la que puso --render-output) por si
     # no hay File Output nodes y tenemos que usarla como fallback.
@@ -173,14 +182,17 @@ def _remap_file_output_nodes(output_dir: str = "/content/render_tmp") -> None:
     scene.render.filepath = f"{output_dir}/_render_result_"
 
     # Remapear nodos File Output en el compositor
-    if not scene.node_tree:
+    # En Blender 5.2 background mode, scene.node_tree puede no existir
+    # si use_nodes=False o el tipo de escena no soporta compositor.
+    node_tree = getattr(scene, "node_tree", None)
+    if node_tree is None:
         print(f"[driver] No hay node_tree en la escena, no se remapean File Outputs")
         scene.render.filepath = original_filepath
         return
 
     remapped = 0
     warn_no_slots = 0
-    for node in scene.node_tree.nodes:
+    for node in node_tree.nodes:
         if node.type != "OUTPUT_FILE":
             continue
 

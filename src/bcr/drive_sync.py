@@ -46,15 +46,19 @@ def upload_frame(
     local_path: Path,
     drive_output_dir: Path,
     frame_num: int,
+    subdir: str = "",
 ) -> Path:
     """Copia un frame renderizado desde la instancia a Drive.
 
     El archivo se nombra como frame_%06d.png en el directorio de salida.
+    Si se especifica subdir, se crea un subdirectorio para organizar
+    multiples salidas (ej: nodos File Output).
 
     Args:
         local_path: Ruta al archivo local del frame renderizado.
         drive_output_dir: Directorio de salida en Drive.
         frame_num: Numero de frame (para nombrar el archivo).
+        subdir: Subdirectorio opcional (ej: nombre del nodo).
 
     Returns:
         Path al archivo en Drive.
@@ -72,7 +76,13 @@ def upload_frame(
     # Preservar la extension original del archivo (.exr, .png, etc.)
     suffix = local_path.suffix if local_path.suffix else ".png"
     dest_filename = f"frame_{frame_num:06d}{suffix}"
-    dest_path = drive_output_dir / dest_filename
+
+    if subdir:
+        dest_dir = drive_output_dir / subdir
+    else:
+        dest_dir = drive_output_dir
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = dest_dir / dest_filename
 
     try:
         shutil.copy2(str(local_path), str(dest_path))
@@ -103,7 +113,10 @@ def remove_local(local_path: Path) -> None:
 
 
 def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
-    """Lista los numeros de frame de archivos frame_%06d.png en Drive.
+    """Lista los numeros de frame de archivos frame_%06d.* en Drive.
+
+    Busca recursivamente en subdirectorios para encontrar frames
+    organizados por nodo (File Output remapeados).
 
     Args:
         drive_output_dir: Directorio de salida en Drive.
@@ -116,13 +129,18 @@ def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
         return []
 
     frames: list[int] = []
-    for entry in os.listdir(str(drive_output_dir)):
-        if entry.startswith("frame_") and entry.endswith(".png"):
-            num_str = entry.replace("frame_", "").replace(".png", "")
-            try:
-                frames.append(int(num_str))
-            except ValueError:
-                continue
+    for root, _dirs, files in os.walk(str(drive_output_dir)):
+        for entry in files:
+            if entry.startswith("frame_"):
+                # Extraer numero de frame (formato: frame_NNNNNN.ext)
+                base = entry.replace(".png", "").replace(".exr", "")
+                parts = base.split("_")
+                if len(parts) >= 2:
+                    num_str = parts[-1]
+                    try:
+                        frames.append(int(num_str))
+                    except ValueError:
+                        continue
     return sorted(frames)
 
 

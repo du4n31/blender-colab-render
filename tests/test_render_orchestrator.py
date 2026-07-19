@@ -327,3 +327,102 @@ class TestParseSavedLine:
             "/content/render_tmp/beauty_0001.exr",
             "/content/render_tmp/light_0001.exr",
         ]
+
+    def test_windows_path_still_parsed(self):
+        """Rutas Windows se parsean como tuple aunque luego se filtran.
+
+        _parse_saved_line extrae el frame de cualquier path con patron valido.
+        El filtrado de paths invalidos ocurre en _is_valid_output_path (en run()),
+        no en el parseo.
+        """
+        # Usar un patron que SÍ se pueda parsear (underscore + digitos + .ext)
+        line = "Saved: 'C:\\\\Users\\\\artista\\\\Documents\\\\file_name_0001.exr'"
+        result = RenderOrchestrator._parse_saved_line(line)
+        assert result is not None
+        frame_num, path = result
+        assert frame_num == 1
+        assert "C:" in str(path)
+
+
+class TestValidateOutputPath:
+    """Prueba _is_valid_output_path: filtrado de rutas no-Colab."""
+
+    def make_orch(self, tmp_output_dir: Path) -> RenderOrchestrator:
+        return RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/s.blend"),
+            output_dir=tmp_output_dir,
+            drive_output_dir=Path("/drive/o"),
+            blender_scripts_dir=Path("/scripts"),
+            frame_start=1,
+            frame_end=10,
+        )
+
+    def test_accepts_path_under_output_dir(self, tmp_output_dir: Path):
+        """Ruta bajo output_dir es valida."""
+        orch = self.make_orch(tmp_output_dir)
+        valid_path = tmp_output_dir / "Temp" / "beauty_0001.exr"
+        assert orch._is_valid_output_path(valid_path)
+
+    def test_accepts_path_direct_in_output_dir(self, tmp_output_dir: Path):
+        """Ruta directamente en output_dir es valida."""
+        orch = self.make_orch(tmp_output_dir)
+        valid_path = tmp_output_dir / "frame_00001.png"
+        assert orch._is_valid_output_path(valid_path)
+
+    def test_rejects_windows_path(self, tmp_output_dir: Path):
+        """Ruta Windows C:\\... es rechazada."""
+        orch = self.make_orch(tmp_output_dir)
+        bad_path = Path("C:\\Users\\artista\\Documents\\file_name1frane.exr")
+        assert not orch._is_valid_output_path(bad_path)
+
+    def test_rejects_unrelated_path(self, tmp_output_dir: Path):
+        """Ruta fuera de output_dir es rechazada."""
+        orch = self.make_orch(tmp_output_dir)
+        bad_path = Path("/tmp/unrelated/file.exr")
+        assert not orch._is_valid_output_path(bad_path)
+
+    def test_rejects_root_path(self, tmp_output_dir: Path):
+        """Ruta absoluta fuera de todo es rechazada."""
+        orch = self.make_orch(tmp_output_dir)
+        bad_path = Path("/etc/passwd")
+        assert not orch._is_valid_output_path(bad_path)
+
+
+class TestComputeSubdir:
+    """Prueba _compute_subdir: derivar subdirectorio del path."""
+
+    def make_orch(self, tmp_output_dir: Path) -> RenderOrchestrator:
+        return RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/s.blend"),
+            output_dir=tmp_output_dir,
+            drive_output_dir=Path("/drive/o"),
+            blender_scripts_dir=Path("/scripts"),
+            frame_start=1,
+            frame_end=10,
+        )
+
+    def test_file_in_subdirectory(self, tmp_output_dir: Path):
+        """Archivo en subdirectorio -> nombre del subdirectorio."""
+        orch = self.make_orch(tmp_output_dir)
+        path = tmp_output_dir / "Temp" / "beauty_0001.exr"
+        assert orch._compute_subdir(path) == "Temp"
+
+    def test_file_in_nested_subdirectory(self, tmp_output_dir: Path):
+        """Archivo en subdirectorio anidado -> ruta relativa completa."""
+        orch = self.make_orch(tmp_output_dir)
+        path = tmp_output_dir / "Temp" / "beauty" / "beauty_0001.exr"
+        assert orch._compute_subdir(path) == "Temp/beauty"
+
+    def test_file_direct_in_output_dir(self, tmp_output_dir: Path):
+        """Archivo directamente en output_dir -> string vacio."""
+        orch = self.make_orch(tmp_output_dir)
+        path = tmp_output_dir / "frame_00001.png"
+        assert orch._compute_subdir(path) == ""
+
+    def test_file_outside_output_dir(self, tmp_output_dir: Path):
+        """Archivo fuera de output_dir -> string vacio."""
+        orch = self.make_orch(tmp_output_dir)
+        path = Path("/tmp/unrelated/file.exr")
+        assert orch._compute_subdir(path) == ""

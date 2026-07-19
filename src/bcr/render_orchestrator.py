@@ -173,6 +173,12 @@ class RenderOrchestrator:
                 if result is not None:
                     frame_num, local_path = result
 
+                    # Validar que la ruta esta bajo nuestro output_dir (filtra
+                    # paths Windows como C:\\Users\\... que Blender imprime
+                    # si los File Output nodes no fueron remapeados).
+                    if not self._is_valid_output_path(local_path):
+                        continue
+
                     # Saltar si ya subimos esta ruta exacta
                     path_key = str(local_path)
                     if path_key in self._uploaded_paths:
@@ -187,12 +193,15 @@ class RenderOrchestrator:
                         self._update_metrics()
 
                     # Encolar subida (usa la ruta exacta, no busca por frame)
+                    # Calcula el subdirectorio relativo para organizar por nodo
                     if local_path.exists():
                         self._pending_frames.add(frame_num)
+                        subdir = self._compute_subdir(local_path)
                         future = upload_pool.submit(
                             self._upload_and_cleanup,
                             local_path,
                             frame_num,
+                            subdir,
                         )
                         self._upload_futures.append(future)
 
@@ -266,6 +275,42 @@ class RenderOrchestrator:
 
         return None
 
+    def _is_valid_output_path(self, path: Path) -> bool:
+        """Valida que la ruta este bajo nuestro directorio de salida controlado.
+
+        Descarta rutas Windows (C:\\...), rutas arbitrarias fuera de
+        /content/render_tmp, etc. que Blender podria imprimir si los
+        File Output nodes no fueron remapeados correctamente.
+        """
+        try:
+            path.relative_to(self.output_dir)
+            return True
+        except ValueError:
+            return False
+
+    def _compute_subdir(self, path: Path) -> str:
+        """Deriva el subdirectorio relativo para organizar en Drive.
+
+        Si el archivo esta en output_dir/subdir/archivo.ext, retorna
+        'subdir' (el nodo que lo produjo). Si esta directamente en
+        output_dir, retorna '' (raiz).
+
+        Ejemplos:
+            path=/content/render_tmp/Temp/beauty_0001.exr
+            output_dir=/content/render_tmp
+            -> retorna 'Temp'
+
+            path=/content/render_tmp/frame_00001.png
+            output_dir=/content/render_tmp
+            -> retorna ''
+        """
+        try:
+            rel = path.relative_to(self.output_dir)
+            parent = rel.parent
+            return str(parent) if str(parent) != "." else ""
+        except ValueError:
+            return ""
+
     def _find_frame_file(self, frame_num: int) -> Optional[Path]:
         """Busca el archivo de frame renderizado en el directorio temporal.
 
@@ -301,10 +346,22 @@ class RenderOrchestrator:
     # Subida a Drive
     # ------------------------------------------------------------------
 
-    def _upload_and_cleanup(self, local_path: Path, frame_num: int) -> None:
-        """Sube un frame a Drive y lo borra localmente."""
+    def _upload_and_cleanup(
+        self,
+        local_path: Path,
+        frame_num: int,
+        subdir: str = "",
+    ) -> None:
+        """Sube un frame a Drive y lo borra localmente.
+
+        Args:
+            local_path: Ruta local al archivo renderizado.
+            frame_num: Numero de frame.
+            subdir: Subdirectorio en Drive para organizar multiples
+                salidas (ej: nombre del nodo File Output).
+        """
         try:
-            upload_frame(local_path, self.drive_output_dir, frame_num)
+            upload_frame(local_path, self.drive_output_dir, frame_num, subdir)
             remove_local(local_path)
             # Actualizar estado en Drive
             save_state(
@@ -405,7 +462,8 @@ class RenderOrchestrator:
                         continue
                     frame_num = int(frame_match.group(1))
                 try:
-                    upload_frame(f, self.drive_output_dir, frame_num)
+                    subdir = self._compute_subdir(f)
+                    upload_frame(f, self.drive_output_dir, frame_num, subdir)
                     remove_local(f)
                     print(
                         f"[orchestrator] Frame {frame_num} recuperado y subido: {f.name}",

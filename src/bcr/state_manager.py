@@ -131,21 +131,24 @@ def reconcile_with_files(drive_path: Path, state_last_frame: int) -> int:
 def _list_frame_numbers(drive_path: Path) -> list[int]:
     """Lista los numeros de frame de archivos frame_NNNNNN.* en drive_path.
 
-    Soporta .png (formato original) y .exr (File Output nodes).
+    Busca recursivamente en subdirectorios (para frames organizados
+    por nodo File Output). Soporta .png y .exr.
     """
     if not drive_path.exists():
         return []
 
     frames: list[int] = []
-    for entry in os.listdir(str(drive_path)):
-        # frame_000001.png o frame_000001.exr -> extraer numero
-        if entry.startswith("frame_") and (entry.endswith(".png") or entry.endswith(".exr")):
-            base = entry.replace(".png", "").replace(".exr", "")
-            parts = base.split("_")
-            if len(parts) >= 2:
-                num_part = parts[-1]
-                try:
-                    frames.append(int(num_part))
-                except ValueError:
-                    continue
+    for root, _dirs, files in os.walk(str(drive_path)):
+        for entry in files:
+            if entry.startswith("frame_") and (
+                entry.endswith(".png") or entry.endswith(".exr")
+            ):
+                base = entry.replace(".png", "").replace(".exr", "")
+                parts = base.split("_")
+                if len(parts) >= 2:
+                    num_part = parts[-1]
+                    try:
+                        frames.append(int(num_part))
+                    except ValueError:
+                        continue
     return sorted(frames)
