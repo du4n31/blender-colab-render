@@ -186,21 +186,25 @@ def _remap_file_output_nodes(
     # para que no genere un archivo extra ademas de los File Output nodes.
     scene.render.filepath = f"{output_dir}/_render_result_"
 
-    # Remapear nodos File Output en el compositor
-    # En Blender 5.2 background mode, scene.node_tree puede no existir
-    # si use_nodes=False o el tipo de escena no soporta compositor.
-    # Incluso con use_nodes=True, en background mode hay que crearlo explícitamente.
+    # En Blender 5.2, scene.node_tree es una propiedad de SOLO LECTURA.
+    # Se crea automaticamente cuando scene.use_nodes = True.
+    # En background mode, puede que no exista hasta el momento del render,
+    # pero los nodos del .blend deberian estar en bpy.data.node_groups.
     node_tree = getattr(scene, "node_tree", None)
+
+    # Si node_tree es None, buscar en node_groups cargados del .blend
     if node_tree is None:
-        # Intentar crear el node tree del compositor
-        try:
-            node_tree = bpy.data.node_groups.new("CompositorNodeTree", "CompositorNodeTree")
-            scene.node_tree = node_tree
-            print("[driver] Node tree del compositor creado explícitamente")
-        except Exception as e:
-            print(f"[driver] No se pudo crear node_tree: {e}")
-            scene.render.filepath = original_filepath
-            return
+        # Buscar node tree de tipo CompositorNodeTree en los datos cargados
+        for ng in bpy.data.node_groups:
+            if ng.type == "COMPOSITOR":
+                node_tree = ng
+                print(f"[driver] Node tree compositor encontrado en bpy.data: {ng.name}")
+                break
+
+    if node_tree is None:
+        print(f"[driver] No hay node_tree de compositor disponible, no se remapean File Outputs")
+        scene.render.filepath = original_filepath
+        return
 
     # Asegurar que el node tree tiene nodos (puede estar vacio)
     if not node_tree.nodes:
