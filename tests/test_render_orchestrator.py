@@ -132,7 +132,7 @@ class TestBuildCommand:
         assert "/scripts/custom2.py" in cmd
 
     def test_device_and_output_mode_after_ddash(self):
-        """--cycles-device y --output-mode van despues de --."""
+        """--cycles-device, --output-mode y --output-dir van despues de --."""
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
             blend_file=Path("/s.blend"),
@@ -149,14 +149,18 @@ class TestBuildCommand:
         idx_ddash = cmd.index("--")
         idx_device = cmd.index("--cycles-device")
         idx_mode = cmd.index("--output-mode")
+        idx_outdir = cmd.index("--output-dir")
 
         assert idx_device > idx_ddash
         assert idx_mode > idx_ddash
+        assert idx_outdir > idx_ddash
 
         device_idx = cmd.index("--cycles-device")
         assert cmd[device_idx + 1] == "OPTIX"
         mode_idx = cmd.index("--output-mode")
         assert cmd[mode_idx + 1] == "compositor"
+        outdir_idx = cmd.index("--output-dir")
+        assert cmd[outdir_idx + 1] == "/tmp/r"
 
     def test_output_has_render_output(self):
         """Verifica --render-output para la salida directa del render."""

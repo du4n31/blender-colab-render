@@ -129,6 +129,7 @@ class RenderOrchestrator:
         cmd.append("--")
         cmd.extend(["--cycles-device", self.device])
         cmd.extend(["--output-mode", self.output_mode])
+        cmd.extend(["--output-dir", str(self.output_dir)])
 
         return cmd
 

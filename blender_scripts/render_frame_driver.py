@@ -32,9 +32,18 @@ def main() -> None:
         device = args["cycles-device"]
     if args.get("output-mode"):
         output_mode = args["output-mode"]
-    if args.get("render-output"):
-        # Ruta de salida para File Output nodes (opcional, default: /content/render_tmp)
-        output_dir = args["render-output"]
+
+    # Determinar el directorio base limpio (sin patron # de Blender)
+    if args.get("output-dir"):
+        # --output-dir tiene prioridad: ruta limpia explicitamente
+        output_dir = args["output-dir"]
+    elif args.get("render-output"):
+        # Fallback: derivar de --render-output quitando el patron #
+        raw = args["render-output"]
+        if re.search(r"#+", raw):
+            output_dir = str(Path(raw).parent)
+        else:
+            output_dir = raw
     else:
         output_dir = "/content/render_tmp"
 
@@ -56,7 +65,8 @@ def _parse_custom_args(argv: list[str]) -> dict[str, str]:
     """Parsea argumentos --clave valor de sys.argv.
 
     Blender pasa sus propios args primero; los nuestros llegan despues de --.
-    Buscamos especificamente --cycles-device y --output-mode.
+    Buscamos especificamente --cycles-device, --output-mode, --output-dir
+    y --render-output.
     """
     result: dict[str, str] = {}
 
@@ -66,7 +76,12 @@ def _parse_custom_args(argv: list[str]) -> dict[str, str]:
             key = argv[i][2:]  # quitar --
             value = argv[i + 1]
             # Solo nos interesan nuestros argumentos
-            if key in ("cycles-device", "output-mode", "render-output"):
+            if key in (
+                "cycles-device",
+                "output-mode",
+                "output-dir",
+                "render-output",
+            ):
                 result[key] = value
                 i += 2
                 continue
@@ -160,8 +175,13 @@ def _remap_file_output_nodes(
     Ademas, desactiva la salida directa del render (scene.render.filepath)
     para que solo los File Output nodes generen archivos.
 
+    Para nodos EXR Multilayer, preserva los nombres de item (que son nombres
+    de capa dentro del .exr). Para nodos single-layer, agrega marcador de
+    frame _###### a cada item.name.
+
     Args:
-        output_dir: Directorio base para los archivos de salida.
+        output_dir: Directorio base limpio (sin patron # de Blender) para
+            los archivos de salida de File Output nodes.
         output_mode: Modo de salida ('compositor' o 'sequencer').
     """
     import bpy
@@ -218,15 +238,38 @@ def _remap_file_output_nodes(
         new_base = f"{output_dir}/{suffix}"
         node.directory = new_base
 
+        # Limpiar el socket File Name para que no anteponga "file_name"
+        if "File Name" in node.inputs:
+            node.inputs["File Name"].default_value = ""
+
+        # Detectar si este nodo es EXR Multilayer
+        is_multilayer = any(
+            item.format.file_format == "OPEN_EXR_MULTILAYER"
+            for item in node.file_output_items
+        )
+
+        if is_multilayer:
+            # Para nodos MULTILAYER, los items son nombres de capa DENTRO
+            # del .exr, no archivos separados. No modificar item.name.
+            print(
+                f"[driver] Nodo '{node_name}' es EXR Multilayer, "
+                "se remapea directorio pero se preservan nombres de capas"
+            )
+
         # Imprimir cada item del nodo para que el orquestador lo detecte
         for item in node.file_output_items:
             item_name = item.name
-            # Asegurar que el nombre del item incluya marcador de frame
-            # para que el orquestador pueda extraer el numero.
-            item_name_clean = item_name.rstrip("_")
-            if not re.search(r"#+", item_name_clean):
-                item_name_clean = f"{item_name_clean}_######"
-                item.name = item_name_clean
+            if is_multilayer:
+                # Preservar nombre de capa original (no tocar item.name)
+                item_name_clean = item_name
+            else:
+                # Para nodos single-layer, cada item es un archivo separado.
+                # Asegurar que el nombre incluya marcador de frame #.
+                item_name_clean = item_name.rstrip("_")
+                if not re.search(r"#+", item_name_clean):
+                    item_name_clean = f"{item_name_clean}_######"
+                    item.name = item_name_clean
+
             print(
                 f"[driver] File output: {new_base}/{item_name_clean} "
                 f"(frame %d.{item.format.file_format.lower()})"
