@@ -158,8 +158,8 @@ class TestBuildCommand:
         mode_idx = cmd.index("--output-mode")
         assert cmd[mode_idx + 1] == "compositor"
 
-    def test_output_format_args(self):
-        """Verifica --render-format PNG y --use-extension 1."""
+    def test_output_has_render_output(self):
+        """Verifica --render-output para la salida directa del render."""
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
             blend_file=Path("/s.blend"),
@@ -169,11 +169,23 @@ class TestBuildCommand:
         )
         cmd = orch.build_command()
 
-        fmt_idx = cmd.index("--render-format")
-        assert cmd[fmt_idx + 1] == "PNG"
+        out_idx = cmd.index("--render-output")
+        assert cmd[out_idx + 1] == "/tmp/r/frame_#####"
 
-        ext_idx = cmd.index("--use-extension")
-        assert cmd[ext_idx + 1] == "1"
+    def test_no_render_format_forced(self):
+        """NO se fuerza --render-format; el .blend y File Output nodes deciden."""
+        orch = RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/s.blend"),
+            output_dir=Path("/tmp/r"),
+            drive_output_dir=Path("/drive/o"),
+            blender_scripts_dir=Path("/scripts"),
+        )
+        cmd = orch.build_command()
+
+        # No debe contener --render-format ni --use-extension
+        assert "--render-format" not in cmd
+        assert "--use-extension" not in cmd
 
 
 class TestParseSavedLine:
@@ -226,3 +238,52 @@ class TestParseSavedLine:
         line = "Saved: '/tmp/output_abc.png'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is None
+
+    def test_saved_exr_standard(self):
+        """Linea Saved: con archivo EXR (File Output node)."""
+        line = "Saved: '/content/render_tmp/File_Output_node0001.exr'"
+        result = RenderOrchestrator._parse_saved_line(line)
+        assert result == 1
+
+    def test_saved_exr_with_frame_in_name(self):
+        """Linea Saved: con EXR que tiene frame_ en el nombre."""
+        line = "Saved: '/content/render_tmp/my_slot_frame_0001.exr'"
+        result = RenderOrchestrator._parse_saved_line(line)
+        assert result == 1
+
+    def test_saved_exr_high_frame_number(self):
+        """Linea Saved: con EXR de frame alto."""
+        line = "Saved: '/content/render_tmp/beauty_0128.exr'"
+        result = RenderOrchestrator._parse_saved_line(line)
+        assert result == 128
+
+    def test_discard_file_ignored(self):
+        """Archivos _discard_ o _render_result_ se ignoran (salida directa)."""
+        line = "Saved: '/content/render_tmp/_discard_0001.png'"
+        result = RenderOrchestrator._parse_saved_line(line)
+        assert result is None
+
+        line2 = "Saved: '/content/render_tmp/_render_result_0001.png'"
+        result2 = RenderOrchestrator._parse_saved_line(line2)
+        assert result2 is None
+
+    def test_saved_exr_multiple_digits(self):
+        """Linea Saved: con EXR que tiene digitos multiples en el path."""
+        line = "Saved: '/content/render_tmp/Result_0001.exr'"
+        result = RenderOrchestrator._parse_saved_line(line)
+        assert result == 1
+
+    def test_saved_multiple_formats_same_frame(self):
+        """Multiples formatos para el mismo frame."""
+        lines = [
+            "Saved: '/content/render_tmp/_discard_0001.png'",
+            "Saved: '/content/render_tmp/beauty_0001.exr'",
+            "Saved: '/content/render_tmp/light_0001.exr'",
+        ]
+        frames = []
+        for line in lines:
+            frame = RenderOrchestrator._parse_saved_line(line)
+            if frame is not None:
+                frames.append(frame)
+        # Solo los EXR, no el discard
+        assert frames == [1, 1]

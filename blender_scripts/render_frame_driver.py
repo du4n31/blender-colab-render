@@ -14,6 +14,7 @@ Uso (desde linea de comandos de Blender):
 Los argumentos despues de -- se reciben en sys.argv.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -31,12 +32,20 @@ def main() -> None:
         device = args["cycles-device"]
     if args.get("output-mode"):
         output_mode = args["output-mode"]
+    if args.get("render-output"):
+        # Ruta de salida para File Output nodes (opcional, default: /content/render_tmp)
+        output_dir = args["render-output"]
+    else:
+        output_dir = "/content/render_tmp"
 
     # 1. Configurar dispositivo
     _configure_device(device)
 
     # 2. Configurar modo de salida (compositor vs sequencer)
     _configure_output_mode(output_mode)
+
+    # 3. Remapear nodos File Output a una ruta Linux valida
+    _remap_file_output_nodes(output_dir)
 
     print(f"[driver] Dispositivo: {device}")
     print(f"[driver] Modo de salida: {output_mode}")
@@ -57,7 +66,7 @@ def _parse_custom_args(argv: list[str]) -> dict[str, str]:
             key = argv[i][2:]  # quitar --
             value = argv[i + 1]
             # Solo nos interesan nuestros argumentos
-            if key in ("cycles-device", "output-mode"):
+            if key in ("cycles-device", "output-mode", "render-output"):
                 result[key] = value
                 i += 2
                 continue
@@ -135,6 +144,103 @@ def _configure_output_mode(mode: str) -> None:
         )
         scene.render.use_compositing = True
         scene.render.use_sequencer = False
+
+
+def _remap_file_output_nodes(output_dir: str = "/content/render_tmp") -> None:
+    """Remapea todos los nodos File Output del compositor a output_dir.
+
+    Los .blend suelen tener rutas absolutas del sistema local del artista
+    (Windows: C:\\Users\\...). En Colab (Linux) esas rutas no funcionan.
+    Esta funcion reescribe base_path de cada nodo File Output a una ruta
+    valida en Linux.
+
+    Ademas, desactiva la salida directa del render (scene.render.filepath)
+    para que solo los File Output nodes generen archivos.
+
+    Args:
+        output_dir: Directorio base para los archivos de salida.
+    """
+    import bpy
+
+    scene = bpy.context.scene
+
+    # Guardar la ruta original (la que puso --render-output) por si
+    # no hay File Output nodes y tenemos que usarla como fallback.
+    original_filepath = scene.render.filepath
+    original_format = scene.render.image_settings.file_format
+
+    # Redirigir la salida directa del render a un directorio descartable
+    # para que no genere un archivo extra ademas de los File Output nodes.
+    scene.render.filepath = f"{output_dir}/_render_result_"
+    scene.render.image_settings.file_format = "PNG"
+
+    # Remapear nodos File Output en el compositor
+    if not scene.node_tree:
+        print(f"[driver] No hay node_tree en la escena, no se remapean File Outputs")
+        scene.render.filepath = original_filepath
+        scene.render.image_settings.file_format = original_format
+        return
+
+    remapped = 0
+    warn_no_slots = 0
+    for node in scene.node_tree.nodes:
+        if node.type != "OUTPUT_FILE":
+            continue
+
+        node_name = node.name
+        old_base = getattr(node, "base_path", "")
+
+        # Limpiar la ruta original: eliminar prefijos Windows y normalizar
+        # P. ej. "C:\\Users\\..." -> "Users/...", "/tmp\\" -> "tmp"
+        cleaned = old_base.replace("\\", "/")
+        # Extraer solo la parte relativa (quitar C:/, etc.)
+        parts = [p for p in cleaned.split("/") if p and not p.endswith(":")]
+        suffix = "_".join(parts) if parts else node_name
+
+        new_base = f"{output_dir}/{suffix}"
+        node.base_path = new_base
+
+        # Imprimir cada slot del nodo para que el orquestador lo detecte
+        for slot in node.file_slots:
+            slot_path = slot.path
+            # Asegurar que el nombre del slot incluya marcador de frame
+            # para que el orquestador pueda extraer el numero.
+            slot_path_clean = slot_path.rstrip("_")
+            if not re.search(r"#+", slot_path_clean):
+                slot_path_clean = f"{slot_path_clean}_######"
+                slot.path = slot_path_clean
+            print(
+                f"[driver] File output: {new_base}/{slot_path_clean} "
+                f"(frame %d.{slot.format.file_format.lower()})"
+            )
+
+        remapped += 1
+        if not node.file_slots:
+            warn_no_slots += 1
+
+        print(
+            f"[driver] Nodo '{node_name}' remapeado: "
+            f"'{old_base}' -> '{new_base}'"
+        )
+
+    if remapped == 0:
+        # Restaurar la salida directa del render como fallback
+        scene.render.filepath = original_filepath
+        scene.render.image_settings.file_format = original_format
+        print(
+            "[driver] No se encontraron nodos File Output en el compositor, "
+            "se usara la salida directa del render."
+        )
+    else:
+        print(
+            f"[driver] {remapped} nodo(s) File Output remapeado(s) "
+            f"a {output_dir}/"
+        )
+        if warn_no_slots:
+            print(
+                f"[driver] ADVERTENCIA: {warn_no_slots} nodo(s) "
+                "no tienen file_slots"
+            )
 
 
 if __name__ == "__main__":

@@ -106,11 +106,11 @@ class RenderOrchestrator:
         for script_path in self.custom_script_paths:
             cmd.extend(["--python", str(script_path)])
 
-        # Output
+        # Output: usar directorio descartable para la salida directa del render.
+        # Los File Output nodes del compositor son remapeados por el driver
+        # (render_frame_driver.py -> _remap_file_output_nodes()).
         output_pattern = str(self.output_dir / RENDER_OUTPUT_PATTERN)
         cmd.extend(["--render-output", output_pattern])
-        cmd.extend(["--render-format", "PNG"])
-        cmd.extend(["--use-extension", "1"])
 
         # Audio desactivado (por defecto en background mode, pero explicito no duele)
         cmd.append("-noaudio")
@@ -210,33 +210,72 @@ class RenderOrchestrator:
     def _parse_saved_line(line: str) -> Optional[int]:
         """Detecta lineas 'Saved: '<ruta>'' y extrae el numero de frame.
 
-        Blender imprime algo como:
+        Blender imprime lineas como:
             Saved: '/content/render_tmp/frame_00001.png'
+            Saved: '/content/render_tmp/slot_name0001.exr'
             Time: 00:00.53 (Saving: 00:00.08)
+
+        Ignora archivos descartables (_discard_, _render_result_) que
+        son la salida directa del render (no de File Output nodes).
         """
         match = re.search(r"Saved:\s*'([^']+)'", line)
         if not match:
             return None
 
         path = match.group(1)
-        # Extraer numero de frame del archivo
+
+        # Ignorar archivos descartables (salida directa del render,
+        # no de File Output nodes).
+        if "_discard_" in path or "_render_result_" in path:
+            return None
+
+        # Extraer numero de frame del archivo (PNG: frame_00001)
         frame_match = re.search(r"frame_(\d+)", path)
+        if frame_match:
+            return int(frame_match.group(1))
+
+        # Extraer numero de frame de EXR: patron como "slot_name0001.exr"
+        # Toma el ultimo grupo de digitos antes de la extension.
+        frame_match = re.search(r"_(\d+)(?=\.\w+$)", path)
+        if frame_match:
+            return int(frame_match.group(1))
+
+        # Fallback: cualquier grupo de digitos al final del nombre
+        frame_match = re.search(r"(\d+)(?=\.\w+$)", path)
         if frame_match:
             return int(frame_match.group(1))
 
         return None
 
     def _find_frame_file(self, frame_num: int) -> Optional[Path]:
-        """Busca el archivo de frame renderizado en el directorio temporal."""
+        """Busca el archivo de frame renderizado en el directorio temporal.
+
+        Busca primero PNG con el patron frame_NNNNNN, luego EXR
+        cuyos nombres contengan el numero de frame.
+        """
+        # 1. Buscar PNG con patron frame_NNNNNN
         pattern = f"frame_{frame_num:06d}.png"
         candidate = self.output_dir / pattern
         if candidate.exists():
             return candidate
 
-        # Fallback: busqueda por glob
+        # 2. Buscar cualquier archivo que contenga el numero de frame
+        #    (EXR de File Output nodes, etc.)
         for f in self.output_dir.iterdir():
-            if f.name == pattern:
+            if not f.is_file():
+                continue
+            name = f.name
+            # Ignorar descartables
+            if name.startswith("_discard") or name.startswith("_render_result"):
+                continue
+            # Extraer el ultimo numero antes de la extension
+            m = re.search(r"_?(\d+)(?=\.\w+$)", name)
+            if m and int(m.group(1)) == frame_num:
                 return f
+            m = re.search(r"(\d+)(?=\.\w+$)", name)
+            if m and int(m.group(1)) == frame_num:
+                return f
+
         return None
 
     # ------------------------------------------------------------------
@@ -327,22 +366,33 @@ class RenderOrchestrator:
         # Subir frames locales que no se hayan subido
         if self.output_dir.exists():
             for f in sorted(self.output_dir.iterdir()):
-                if f.name.startswith("frame_") and f.name.endswith(".png"):
-                    frame_match = re.search(r"frame_(\d+)", f.name)
-                    if frame_match:
-                        frame_num = int(frame_match.group(1))
-                        try:
-                            upload_frame(f, self.drive_output_dir, frame_num)
-                            remove_local(f)
-                            print(
-                                f"[orchestrator] Frame {frame_num} recuperado y subido.",
-                                file=sys.stderr,
-                            )
-                        except DriveSyncError as exc:
-                            print(
-                                f"[orchestrator] Error en reconciliacion: {exc}",
-                                file=sys.stderr,
-                            )
+                # Saltar descartables
+                if f.name.startswith("_discard") or f.name.startswith("_render_result"):
+                    continue
+                # Detectar PNG con patron frame_NNNNNN
+                frame_match = re.search(r"frame_(\d+)", f.name)
+                if frame_match:
+                    frame_num = int(frame_match.group(1))
+                else:
+                    # Detectar EXR: ultimo grupo de digitos antes de la extension
+                    frame_match = re.search(r"_?(\d+)(?=\.\w+$)", f.name)
+                    if not frame_match:
+                        frame_match = re.search(r"(\d+)(?=\.\w+$)", f.name)
+                    if not frame_match:
+                        continue
+                    frame_num = int(frame_match.group(1))
+                try:
+                    upload_frame(f, self.drive_output_dir, frame_num)
+                    remove_local(f)
+                    print(
+                        f"[orchestrator] Frame {frame_num} recuperado y subido: {f.name}",
+                        file=sys.stderr,
+                    )
+                except DriveSyncError as exc:
+                    print(
+                        f"[orchestrator] Error en reconciliacion: {exc}",
+                        file=sys.stderr,
+                    )
 
     def _cleanup_process(self) -> None:
         """Limpia el proceso de Blender si sigue vivo."""
