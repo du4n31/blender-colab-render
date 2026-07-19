@@ -76,6 +76,7 @@ class RenderOrchestrator:
         self._upload_futures: list = []
         self._reconcile_done = False
         self._pending_frames: set[int] = set()
+        self._uploaded_paths: set[str] = set()
 
     # ------------------------------------------------------------------
     # Construccion del comando
@@ -159,6 +160,7 @@ class RenderOrchestrator:
             raise RenderError(msg) from exc
 
         self._current_frame = 0
+        self._uploaded_paths: set[str] = set()  # rutas ya subidas
         upload_pool = ThreadPoolExecutor(max_workers=2)
 
         try:
@@ -166,17 +168,26 @@ class RenderOrchestrator:
                 line = line.rstrip("\n")
                 print(line, file=sys.stderr)  # re-enviar a stderr para visibilidad
 
-                # Detectar frames completados
-                frame_num = self._parse_saved_line(line)
-                if frame_num is not None:
-                    self._current_frame = frame_num
-                    now = time.time()
-                    self._frame_times.append(now)
-                    self._update_metrics()
+                # Detectar frames completados (usa la ruta exacta de Blender)
+                result = self._parse_saved_line(line)
+                if result is not None:
+                    frame_num, local_path = result
 
-                    # Encolar subida
-                    local_path = self._find_frame_file(frame_num)
-                    if local_path:
+                    # Saltar si ya subimos esta ruta exacta
+                    path_key = str(local_path)
+                    if path_key in self._uploaded_paths:
+                        continue
+                    self._uploaded_paths.add(path_key)
+
+                    # Actualizar metricas solo cuando cambia el frame
+                    if frame_num != self._current_frame:
+                        self._current_frame = frame_num
+                        now = time.time()
+                        self._frame_times.append(now)
+                        self._update_metrics()
+
+                    # Encolar subida (usa la ruta exacta, no busca por frame)
+                    if local_path.exists():
                         self._pending_frames.add(frame_num)
                         future = upload_pool.submit(
                             self._upload_and_cleanup,
@@ -207,8 +218,10 @@ class RenderOrchestrator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _parse_saved_line(line: str) -> Optional[int]:
-        """Detecta lineas 'Saved: '<ruta>'' y extrae el numero de frame.
+    def _parse_saved_line(
+        line: str,
+    ) -> Optional[tuple[int, Path]]:
+        """Detecta lineas 'Saved: '<ruta>'' y extrae (frame, ruta_exacta).
 
         Blender imprime lineas como:
             Saved: '/content/render_tmp/frame_00001.png'
@@ -217,33 +230,39 @@ class RenderOrchestrator:
 
         Ignora archivos descartables (_discard_, _render_result_) que
         son la salida directa del render (no de File Output nodes).
+
+        Returns:
+            tuple (int, Path) con numero de frame y ruta exacta,
+            o None si no se pudo extraer o es descartable.
         """
         match = re.search(r"Saved:\s*'([^']+)'", line)
         if not match:
             return None
 
-        path = match.group(1)
+        path_str = match.group(1)
 
         # Ignorar archivos descartables (salida directa del render,
         # no de File Output nodes).
-        if "_discard_" in path or "_render_result_" in path:
+        if "_discard_" in path_str or "_render_result_" in path_str:
             return None
 
+        path = Path(path_str)
+
         # Extraer numero de frame del archivo (PNG: frame_00001)
-        frame_match = re.search(r"frame_(\d+)", path)
+        frame_match = re.search(r"frame_(\d+)", path_str)
         if frame_match:
-            return int(frame_match.group(1))
+            return int(frame_match.group(1)), path
 
         # Extraer numero de frame de EXR: patron como "slot_name0001.exr"
         # Toma el ultimo grupo de digitos antes de la extension.
-        frame_match = re.search(r"_(\d+)(?=\.\w+$)", path)
+        frame_match = re.search(r"_(\d+)(?=\.\w+$)", path_str)
         if frame_match:
-            return int(frame_match.group(1))
+            return int(frame_match.group(1)), path
 
         # Fallback: cualquier grupo de digitos al final del nombre
-        frame_match = re.search(r"(\d+)(?=\.\w+$)", path)
+        frame_match = re.search(r"(\d+)(?=\.\w+$)", path_str)
         if frame_match:
-            return int(frame_match.group(1))
+            return int(frame_match.group(1)), path
 
         return None
 

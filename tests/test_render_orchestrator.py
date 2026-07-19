@@ -189,19 +189,30 @@ class TestBuildCommand:
 
 
 class TestParseSavedLine:
-    """Prueba el parseo de lineas 'Saved:' del stdout de Blender."""
+    """Prueba el parseo de lineas 'Saved:' del stdout de Blender.
+
+    Ahora _parse_saved_line devuelve tuple (frame_num, Path) con la
+    ruta exacta que Blender reporta, para poder soportar multiples
+    archivos por frame (varios File Output nodes).
+    """
 
     def test_saved_line_standard(self):
         """Linea Saved: estandar."""
         line = "Saved: '/content/render_tmp/frame_00001.png'"
         result = RenderOrchestrator._parse_saved_line(line)
-        assert result == 1
+        assert result is not None
+        frame_num, path = result
+        assert frame_num == 1
+        assert str(path) == "/content/render_tmp/frame_00001.png"
 
     def test_saved_line_high_number(self):
         """Linea Saved: con numero de frame alto."""
         line = "Saved: '/content/render_tmp/frame_12345.png'"
         result = RenderOrchestrator._parse_saved_line(line)
-        assert result == 12345
+        assert result is not None
+        frame_num, path = result
+        assert frame_num == 12345
+        assert str(path) == "/content/render_tmp/frame_12345.png"
 
     def test_not_a_saved_line(self):
         """Linea que no es de Saved: devuelve None."""
@@ -213,7 +224,10 @@ class TestParseSavedLine:
         """Linea Saved con path temporal."""
         line = "Saved: '/tmp/blender_XXXXXX/frame_00001.png'"
         result = RenderOrchestrator._parse_saved_line(line)
-        assert result == 1
+        assert result is not None
+        frame_num, path = result
+        assert frame_num == 1
+        assert str(path) == "/tmp/blender_XXXXXX/frame_00001.png"
 
     def test_saved_blender_stdout_pattern(self):
         """Patron real de stdout de Blender."""
@@ -227,11 +241,18 @@ class TestParseSavedLine:
             " Time: 00:00.48 (Saving: 00:00.06)",
         ]
         frames = []
+        paths = []
         for line in lines:
             result = RenderOrchestrator._parse_saved_line(line)
             if result is not None:
-                frames.append(result)
+                frame_num, path = result
+                frames.append(frame_num)
+                paths.append(str(path))
         assert frames == [1, 2]
+        assert paths == [
+            "/content/render_tmp/frame_00001.png",
+            "/content/render_tmp/frame_00002.png",
+        ]
 
     def test_no_frame_number_in_path(self):
         """Path sin numero de frame devuelve None."""
@@ -243,19 +264,28 @@ class TestParseSavedLine:
         """Linea Saved: con archivo EXR (File Output node)."""
         line = "Saved: '/content/render_tmp/File_Output_node0001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
-        assert result == 1
+        assert result is not None
+        frame_num, path = result
+        assert frame_num == 1
+        assert str(path) == "/content/render_tmp/File_Output_node0001.exr"
 
     def test_saved_exr_with_frame_in_name(self):
         """Linea Saved: con EXR que tiene frame_ en el nombre."""
         line = "Saved: '/content/render_tmp/my_slot_frame_0001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
-        assert result == 1
+        assert result is not None
+        frame_num, path = result
+        assert frame_num == 1
+        assert str(path) == "/content/render_tmp/my_slot_frame_0001.exr"
 
     def test_saved_exr_high_frame_number(self):
         """Linea Saved: con EXR de frame alto."""
         line = "Saved: '/content/render_tmp/beauty_0128.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
-        assert result == 128
+        assert result is not None
+        frame_num, path = result
+        assert frame_num == 128
+        assert str(path) == "/content/render_tmp/beauty_0128.exr"
 
     def test_discard_file_ignored(self):
         """Archivos _discard_ o _render_result_ se ignoran (salida directa)."""
@@ -271,7 +301,10 @@ class TestParseSavedLine:
         """Linea Saved: con EXR que tiene digitos multiples en el path."""
         line = "Saved: '/content/render_tmp/Result_0001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
-        assert result == 1
+        assert result is not None
+        frame_num, path = result
+        assert frame_num == 1
+        assert str(path) == "/content/render_tmp/Result_0001.exr"
 
     def test_saved_multiple_formats_same_frame(self):
         """Multiples formatos para el mismo frame."""
@@ -281,9 +314,16 @@ class TestParseSavedLine:
             "Saved: '/content/render_tmp/light_0001.exr'",
         ]
         frames = []
+        paths = []
         for line in lines:
-            frame = RenderOrchestrator._parse_saved_line(line)
-            if frame is not None:
-                frames.append(frame)
+            result = RenderOrchestrator._parse_saved_line(line)
+            if result is not None:
+                frame_num, path = result
+                frames.append(frame_num)
+                paths.append(str(path))
         # Solo los EXR, no el discard
         assert frames == [1, 1]
+        assert paths == [
+            "/content/render_tmp/beauty_0001.exr",
+            "/content/render_tmp/light_0001.exr",
+        ]
