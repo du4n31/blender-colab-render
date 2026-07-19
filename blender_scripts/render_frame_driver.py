@@ -134,13 +134,9 @@ def _configure_output_mode(mode: str) -> None:
     if mode == "compositor":
         scene.render.use_compositing = True
         scene.render.use_sequencer = False
-        # IMPORTANTE: En background mode, el node tree del compositor
-        # solo existe si use_nodes = True
-        scene.use_nodes = True
     elif mode == "sequencer":
         scene.render.use_compositing = False
         scene.render.use_sequencer = True
-        scene.use_nodes = False
     else:
         print(
             f"[driver] Modo de salida desconocido '{mode}', "
@@ -148,7 +144,6 @@ def _configure_output_mode(mode: str) -> None:
         )
         scene.render.use_compositing = True
         scene.render.use_sequencer = False
-        scene.use_nodes = True
 
 
 def _remap_file_output_nodes(
@@ -159,7 +154,7 @@ def _remap_file_output_nodes(
 
     Los .blend suelen tener rutas absolutas del sistema local del artista
     (Windows: C:\\Users\\...). En Colab (Linux) esas rutas no funcionan.
-    Esta funcion reescribe base_path de cada nodo File Output a una ruta
+    Esta funcion reescribe directory de cada nodo File Output a una ruta
     valida en Linux.
 
     Ademas, desactiva la salida directa del render (scene.render.filepath)
@@ -186,23 +181,15 @@ def _remap_file_output_nodes(
     # para que no genere un archivo extra ademas de los File Output nodes.
     scene.render.filepath = f"{output_dir}/_render_result_"
 
-    # En Blender 5.2, scene.node_tree es una propiedad de SOLO LECTURA.
-    # Se crea automaticamente cuando scene.use_nodes = True.
-    # En background mode, puede que no exista hasta el momento del render,
-    # pero los nodos del .blend deberian estar en bpy.data.node_groups.
-    node_tree = getattr(scene, "node_tree", None)
-
-    # Si node_tree es None, buscar en node_groups cargados del .blend
-    if node_tree is None:
-        # Buscar node tree de tipo CompositorNodeTree en los datos cargados
-        for ng in bpy.data.node_groups:
-            if ng.type == "COMPOSITOR":
-                node_tree = ng
-                print(f"[driver] Node tree compositor encontrado en bpy.data: {ng.name}")
-                break
+    # En Blender 5.0+, el arbol de nodos del compositor se accede mediante
+    # scene.compositing_node_group. scene.node_tree ya no existe como atributo.
+    node_tree = scene.compositing_node_group
 
     if node_tree is None:
-        print(f"[driver] No hay node_tree de compositor disponible, no se remapean File Outputs")
+        print(
+            "[driver] No hay node_tree de compositor disponible, "
+            "no se remapean File Outputs"
+        )
         scene.render.filepath = original_filepath
         return
 
@@ -219,7 +206,7 @@ def _remap_file_output_nodes(
             continue
 
         node_name = node.name
-        old_base = getattr(node, "base_path", "")
+        old_base = getattr(node, "directory", "")
 
         # Limpiar la ruta original: eliminar prefijos Windows y normalizar
         # P. ej. "C:\\Users\\..." -> "Users/...", "/tmp\\" -> "tmp"
@@ -229,24 +216,24 @@ def _remap_file_output_nodes(
         suffix = "_".join(parts) if parts else node_name
 
         new_base = f"{output_dir}/{suffix}"
-        node.base_path = new_base
+        node.directory = new_base
 
-        # Imprimir cada slot del nodo para que el orquestador lo detecte
-        for slot in node.file_slots:
-            slot_path = slot.path
-            # Asegurar que el nombre del slot incluya marcador de frame
+        # Imprimir cada item del nodo para que el orquestador lo detecte
+        for item in node.file_output_items:
+            item_name = item.name
+            # Asegurar que el nombre del item incluya marcador de frame
             # para que el orquestador pueda extraer el numero.
-            slot_path_clean = slot_path.rstrip("_")
-            if not re.search(r"#+", slot_path_clean):
-                slot_path_clean = f"{slot_path_clean}_######"
-                slot.path = slot_path_clean
+            item_name_clean = item_name.rstrip("_")
+            if not re.search(r"#+", item_name_clean):
+                item_name_clean = f"{item_name_clean}_######"
+                item.name = item_name_clean
             print(
-                f"[driver] File output: {new_base}/{slot_path_clean} "
-                f"(frame %d.{slot.format.file_format.lower()})"
+                f"[driver] File output: {new_base}/{item_name_clean} "
+                f"(frame %d.{item.format.file_format.lower()})"
             )
 
         remapped += 1
-        if not node.file_slots:
+        if not node.file_output_items:
             warn_no_slots += 1
 
         print(
@@ -258,9 +245,12 @@ def _remap_file_output_nodes(
         # Restaurar la salida directa del render como fallback
         scene.render.filepath = original_filepath
         print(
-            "[driver] No se encontraron nodos File Output en el compositor, "
-            "se usara la salida directa del render."
+            "[driver] ERROR: No se encontraron nodos File Output en el compositor. "
+            "Verifique que el .blend tenga nodos File Output en el compositor "
+            "y que sean accesibles via scene.compositing_node_group.",
+            file=sys.stderr,
         )
+        sys.exit(1)
     else:
         print(
             f"[driver] {remapped} nodo(s) File Output remapeado(s) "
@@ -269,7 +259,7 @@ def _remap_file_output_nodes(
         if warn_no_slots:
             print(
                 f"[driver] ADVERTENCIA: {warn_no_slots} nodo(s) "
-                "no tienen file_slots"
+                "no tienen file_output_items"
             )
 
 

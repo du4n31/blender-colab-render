@@ -74,6 +74,16 @@ Descarga scripts .py desde URLs y los prepara para pasarlos a Blender.
 Unico script que se ejecuta dentro de Blender. Parsea `--output-mode` y
 `--cycles-device` de `sys.argv` (despues de `--`) y configura todo antes del render.
 
+### Dependencia de Blender 5.0+
+Este script usa propiedades introducidas en Blender 5.0:
+- `scene.compositing_node_group` (reemplaza a `scene.node_tree`, que era de solo lectura)
+- `node.directory` (reemplaza a `node.base_path`)
+- `node.file_output_items` (reemplaza a `node.file_slots`/`node.layer_slots`)
+- `scene.render.use_compositing`/`use_sequencer` (reemplaza a `scene.use_nodes`)
+
+No es compatible con Blender <=4.5 en su funcion de remapeo de File Output nodes.
+El modo sequencer no usa estas propiedades y sigue funcionando en versiones anteriores.
+
 ## Flujo de datos
 
 ```
