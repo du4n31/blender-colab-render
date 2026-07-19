@@ -383,8 +383,12 @@ class RenderOrchestrator:
         print("[orchestrator] Reconciliando frames pendientes...", file=sys.stderr)
 
         # Subir frames locales que no se hayan subido
+        # Usa rglob para encontrar archivos en subdirectorios (los File Output
+        # nodes remapeados pueden crear subdirectorios en output_dir).
         if self.output_dir.exists():
-            for f in sorted(self.output_dir.iterdir()):
+            for f in sorted(self.output_dir.rglob("*")):
+                if not f.is_file():
+                    continue
                 # Saltar descartables
                 if f.name.startswith("_discard") or f.name.startswith("_render_result"):
                     continue

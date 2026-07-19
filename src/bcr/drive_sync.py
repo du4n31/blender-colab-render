@@ -69,7 +69,9 @@ def upload_frame(
         msg = f"El archivo local no existe: {local_path}"
         raise DriveSyncError(msg)
 
-    dest_filename = f"frame_{frame_num:06d}.png"
+    # Preservar la extension original del archivo (.exr, .png, etc.)
+    suffix = local_path.suffix if local_path.suffix else ".png"
+    dest_filename = f"frame_{frame_num:06d}{suffix}"
     dest_path = drive_output_dir / dest_filename
 
     try:
