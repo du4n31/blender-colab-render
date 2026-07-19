@@ -1,0 +1,48 @@
+# Blender
+*.blend
+*.blend1
+*.blend2
+
+# Render output
+render_output/
+output/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.whl
+
+# Notebooks
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+tmp/
+*.tmp
+
+# Blender binaries downloaded for testing
+blender-*/
+blender.tar.xz
