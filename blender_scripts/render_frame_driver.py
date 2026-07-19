@@ -167,18 +167,15 @@ def _remap_file_output_nodes(output_dir: str = "/content/render_tmp") -> None:
     # Guardar la ruta original (la que puso --render-output) por si
     # no hay File Output nodes y tenemos que usarla como fallback.
     original_filepath = scene.render.filepath
-    original_format = scene.render.image_settings.file_format
 
     # Redirigir la salida directa del render a un directorio descartable
     # para que no genere un archivo extra ademas de los File Output nodes.
     scene.render.filepath = f"{output_dir}/_render_result_"
-    scene.render.image_settings.file_format = "PNG"
 
     # Remapear nodos File Output en el compositor
     if not scene.node_tree:
         print(f"[driver] No hay node_tree en la escena, no se remapean File Outputs")
         scene.render.filepath = original_filepath
-        scene.render.image_settings.file_format = original_format
         return
 
     remapped = 0
@@ -226,7 +223,6 @@ def _remap_file_output_nodes(output_dir: str = "/content/render_tmp") -> None:
     if remapped == 0:
         # Restaurar la salida directa del render como fallback
         scene.render.filepath = original_filepath
-        scene.render.image_settings.file_format = original_format
         print(
             "[driver] No se encontraron nodos File Output en el compositor, "
             "se usara la salida directa del render."
