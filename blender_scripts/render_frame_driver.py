@@ -189,11 +189,18 @@ def _remap_file_output_nodes(
     # Remapear nodos File Output en el compositor
     # En Blender 5.2 background mode, scene.node_tree puede no existir
     # si use_nodes=False o el tipo de escena no soporta compositor.
+    # Incluso con use_nodes=True, en background mode hay que crearlo explícitamente.
     node_tree = getattr(scene, "node_tree", None)
     if node_tree is None:
-        print(f"[driver] No hay node_tree en la escena, no se remapean File Outputs")
-        scene.render.filepath = original_filepath
-        return
+        # Intentar crear el node tree del compositor
+        try:
+            node_tree = bpy.data.node_groups.new("CompositorNodeTree", "CompositorNodeTree")
+            scene.node_tree = node_tree
+            print("[driver] Node tree del compositor creado explícitamente")
+        except Exception as e:
+            print(f"[driver] No se pudo crear node_tree: {e}")
+            scene.render.filepath = original_filepath
+            return
 
     # Asegurar que el node tree tiene nodos (puede estar vacio)
     if not node_tree.nodes:
