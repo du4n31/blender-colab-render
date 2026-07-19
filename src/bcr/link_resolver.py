@@ -104,7 +104,18 @@ def _extract_google_drive_id(url: str) -> Optional[str]:
 
 
 def _resolve_mediafire(url: str) -> str:
-    """Extrae la URL real de descarga desde la pagina HTML de MediaFire."""
+    """Extrae la URL real de descarga desde la pagina HTML de MediaFire.
+
+    Si la URL ya es un enlace directo (subdominio download*.mediafire.com),
+    se devuelve tal cual.
+    """
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.netloc.lower()
+
+    # Si ya es un enlace directo de MediaFire, devolverlo tal cual
+    if host.startswith("download") and ".mediafire.com" in host:
+        return url
+
     try:
         resp = requests.get(url, timeout=30, allow_redirects=True)
         resp.raise_for_status()

@@ -124,6 +124,28 @@ class TestGoogleDriveResolution:
         assert "export=download" in result
 
 
+class TestMediafireDirectLink:
+    """Pruebas para enlaces directos de MediaFire (download*.mediafire.com)."""
+
+    def test_download_subdomain_passthrough(self):
+        """URL download*.mediafire.com que ya es directa se devuelve tal cual."""
+        url = (
+            "https://download848.mediafire.com/abc123/Untitled.blend"
+        )
+        result = resolve_download_url(url)
+        assert result == url
+
+    def test_download_subdomain_with_long_path(self):
+        """URL download*.mediafire.com con path largo se devuelve tal cual."""
+        url = (
+            "https://download848.mediafire.com/"
+            "k8kkuh6b34tghFRT1Wk6frlIxwdcqtg-MTwkXVrAezowhcyex-79Xx"
+            "/t0h9ex0b1k96qcc/Untitled.blend"
+        )
+        result = resolve_download_url(url)
+        assert result == url
+
+
 class TestMediafireResolution:
     """Pruebas para resolucion de MediaFire."""
 
