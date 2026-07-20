@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from typing import Optional
 
 # --- Blender ---
 BLENDER_VERSION = "5.2.0"
@@ -30,6 +31,37 @@ BACKLOG_LIMIT = 5  # max frames locales pendientes de subir antes de pausar
 # --- URLs de descarga ---
 DOWNLOAD_TIMEOUT_SECONDS = 120
 CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB
+
+
+def extract_frame_number(name: str) -> Optional[int]:
+    """Extrae un numero de frame de 6 digitos de un nombre de archivo.
+
+    Busca exactamente 6 digitos consecutivos que no esten pegados a otros
+    digitos (regex: lookbehind/lookahead para digitos). El numero de frame
+    puede estar en cualquier posicion del nombre. Si hay multiples bloques
+    de 6 digitos, toma el ULTIMO (el que agrega _###### al final).
+
+    Examples:
+        >>> extract_frame_number("Result_000001.exr")
+        1
+        >>> extract_frame_number("File_Output_001_000001.exr")
+        1
+        >>> extract_frame_number("frame_00001.png")   # 5 digitos
+        None
+        >>> extract_frame_number("file_name0000001.exr")  # 7 digitos
+        None
+        >>> extract_frame_number("file_name1frane.exr")   # 1 digito
+        None
+        >>> extract_frame_number("File_Output_000023_000001.exr")  # ultimo bloque
+        1
+    """
+    import re
+
+    matches = list(re.finditer(r"(?<!\d)(\d{6})(?!\d)", name))
+    if not matches:
+        return None
+    # Tomar el ULTIMO bloque de 6 digitos (el que agrega _######)
+    return int(matches[-1].group(1))
 
 
 def validate_frame_range(frame_start: int, frame_end: int) -> tuple[int, int]:

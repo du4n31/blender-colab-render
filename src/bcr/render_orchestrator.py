@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from bcr.config import BACKLOG_LIMIT, RENDER_OUTPUT_PATTERN
+from bcr.config import BACKLOG_LIMIT, RENDER_OUTPUT_PATTERN, extract_frame_number
 from bcr.drive_sync import DriveSyncError, remove_local, upload_frame
 from bcr.state_manager import reconcile_with_files, save_state
 
@@ -234,9 +234,14 @@ class RenderOrchestrator:
         """Detecta lineas 'Saved: '<ruta>'' y extrae (frame, ruta_exacta).
 
         Blender imprime lineas como:
-            Saved: '/content/render_tmp/frame_00001.png'
-            Saved: '/content/render_tmp/slot_name0001.exr'
+            Saved: '/content/render_tmp/Result_000001.exr'
+            Saved: '/content/render_tmp/File_Output_001_000001.exr'
             Time: 00:00.53 (Saving: 00:00.08)
+
+        El numero de frame se extrae como bloque de exactamente 6 digitos
+        en cualquier posicion del nombre (no solo antes de la extension).
+        Esto cubre tanto nodos single-layer (item.name + ######) como
+        nodos multilayer (file_name + ######).
 
         Ignora archivos descartables (_discard_, _render_result_) que
         son la salida directa del render (no de File Output nodes).
@@ -257,22 +262,9 @@ class RenderOrchestrator:
             return None
 
         path = Path(path_str)
-
-        # Extraer numero de frame del archivo (PNG: frame_00001)
-        frame_match = re.search(r"frame_(\d+)", path_str)
-        if frame_match:
-            return int(frame_match.group(1)), path
-
-        # Extraer numero de frame de EXR: patron como "slot_name0001.exr"
-        # Toma el ultimo grupo de digitos antes de la extension.
-        frame_match = re.search(r"_(\d+)(?=\.\w+$)", path_str)
-        if frame_match:
-            return int(frame_match.group(1)), path
-
-        # Fallback: cualquier grupo de digitos al final del nombre
-        frame_match = re.search(r"(\d+)(?=\.\w+$)", path_str)
-        if frame_match:
-            return int(frame_match.group(1)), path
+        frame_num = extract_frame_number(path_str)
+        if frame_num is not None:
+            return frame_num, path
 
         return None
 
@@ -315,30 +307,21 @@ class RenderOrchestrator:
     def _find_frame_file(self, frame_num: int) -> Optional[Path]:
         """Busca el archivo de frame renderizado en el directorio temporal.
 
-        Busca primero PNG con el patron frame_NNNNNN, luego EXR
-        cuyos nombres contengan el numero de frame.
+        Busca cualquier archivo cuyo nombre contenga exactamente 6 digitos
+        que coincidan con frame_num.
         """
-        # 1. Buscar PNG con patron frame_NNNNNN
-        pattern = f"frame_{frame_num:06d}.png"
-        candidate = self.output_dir / pattern
-        if candidate.exists():
-            return candidate
+        if not self.output_dir.exists():
+            return None
 
-        # 2. Buscar cualquier archivo que contenga el numero de frame
-        #    (EXR de File Output nodes, etc.)
-        for f in self.output_dir.iterdir():
+        for f in self.output_dir.rglob("*"):
             if not f.is_file():
                 continue
             name = f.name
             # Ignorar descartables
             if name.startswith("_discard") or name.startswith("_render_result"):
                 continue
-            # Extraer el ultimo numero antes de la extension
-            m = re.search(r"_?(\d+)(?=\.\w+$)", name)
-            if m and int(m.group(1)) == frame_num:
-                return f
-            m = re.search(r"(\d+)(?=\.\w+$)", name)
-            if m and int(m.group(1)) == frame_num:
+            nf = extract_frame_number(name)
+            if nf is not None and nf == frame_num:
                 return f
 
         return None
@@ -450,18 +433,9 @@ class RenderOrchestrator:
                 # Saltar descartables
                 if f.name.startswith("_discard") or f.name.startswith("_render_result"):
                     continue
-                # Detectar PNG con patron frame_NNNNNN
-                frame_match = re.search(r"frame_(\d+)", f.name)
-                if frame_match:
-                    frame_num = int(frame_match.group(1))
-                else:
-                    # Detectar EXR: ultimo grupo de digitos antes de la extension
-                    frame_match = re.search(r"_?(\d+)(?=\.\w+$)", f.name)
-                    if not frame_match:
-                        frame_match = re.search(r"(\d+)(?=\.\w+$)", f.name)
-                    if not frame_match:
-                        continue
-                    frame_num = int(frame_match.group(1))
+                frame_num = extract_frame_number(f.name)
+                if frame_num is None:
+                    continue
                 try:
                     subdir = self._compute_subdir(f)
                     upload_frame(f, self.drive_output_dir, frame_num, subdir)
