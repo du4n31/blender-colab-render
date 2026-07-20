@@ -8,7 +8,7 @@ import os
 import shutil
 from pathlib import Path
 
-from bcr.config import DRIVE_MOUNT_POINT
+from bcr.config import DRIVE_MOUNT_POINT, extract_frame_number
 
 
 class DriveSyncError(Exception):
@@ -120,16 +120,17 @@ def remove_local(local_path: Path) -> None:
 
 
 def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
-    """Lista los numeros de frame de archivos frame_%06d.* en Drive.
+    """Lista los numeros de frame subidos a Drive.
 
-    Busca recursivamente en subdirectorios para encontrar frames
-    organizados por nodo (File Output remapeados).
+    Busca recursivamente en subdirectorios archivos cuyo nombre contenga
+    exactamente 6 digitos consecutivos (el numero de frame). No asume
+    un prefijo especifico como "frame_".
 
     Args:
         drive_output_dir: Directorio de salida en Drive.
 
     Returns:
-        Lista ordenada de numeros de frame ya subidos.
+        Lista ordenada de numeros de frame ya subidos (sin duplicados).
     """
     drive_output_dir = Path(drive_output_dir)
     if not drive_output_dir.exists():
@@ -138,17 +139,10 @@ def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
     frames: list[int] = []
     for root, _dirs, files in os.walk(str(drive_output_dir)):
         for entry in files:
-            if entry.startswith("frame_"):
-                # Extraer numero de frame (formato: frame_NNNNNN.ext)
-                base = entry.replace(".png", "").replace(".exr", "")
-                parts = base.split("_")
-                if len(parts) >= 2:
-                    num_str = parts[-1]
-                    try:
-                        frames.append(int(num_str))
-                    except ValueError:
-                        continue
-    return sorted(frames)
+            frame_num = extract_frame_number(entry)
+            if frame_num is not None:
+                frames.append(frame_num)
+    return sorted(set(frames))
 
 
 def _validate_drive_path(path: Path) -> None:
