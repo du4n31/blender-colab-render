@@ -238,42 +238,36 @@ def _remap_file_output_nodes(
         new_base = f"{output_dir}/{suffix}"
         node.directory = new_base
 
-        # Limpiar el socket File Name para que no anteponga "file_name"
-        if "File Name" in node.inputs:
-            node.inputs["File Name"].default_value = ""
-
-        # Detectar si este nodo es EXR Multilayer
-        is_multilayer = any(
-            item.format.file_format == "OPEN_EXR_MULTILAYER"
-            for item in node.file_output_items
+        # Detectar si este nodo es EXR Multilayer.
+        # En nodos multilayer, file_output_items son nombres de capa dentro
+        # del .exr combinado, no nombres de archivo separados.
+        is_multilayer = (
+            getattr(node.format, "file_format", "") == "OPEN_EXR_MULTILAYER"
         )
+        safe_node_name = re.sub(r"[^A-Za-z0-9_]+", "_", node_name)
 
         if is_multilayer:
-            # Para nodos MULTILAYER, los items son nombres de capa DENTRO
-            # del .exr, no archivos separados. No modificar item.name.
+            # En EXR multilayer, el marcador de frame va en file_name (que
+            # es la unica propiedad que determina el nombre fisico del
+            # archivo). item.name son capas internas y no se tocan.
+            node.file_name = f"{safe_node_name}_######"
             print(
-                f"[driver] Nodo '{node_name}' es EXR Multilayer, "
-                "se remapea directorio pero se preservan nombres de capas"
+                f"[driver] Nodo '{node_name}' es EXR multilayer, "
+                f"file_name -> '{node.file_name}' "
+                f"({len(node.file_output_items)} capas preservadas)"
             )
-
-        # Imprimir cada item del nodo para que el orquestador lo detecte
-        for item in node.file_output_items:
-            item_name = item.name
-            if is_multilayer:
-                # Preservar nombre de capa original (no tocar item.name)
-                item_name_clean = item_name
-            else:
-                # Para nodos single-layer, cada item es un archivo separado.
-                # Asegurar que el nombre incluya marcador de frame #.
-                item_name_clean = item_name.rstrip("_")
+        else:
+            # En nodos single-layer, cada item es un archivo separado.
+            # file_name debe quedar vacio para no duplicar marcador.
+            node.file_name = ""
+            for item in node.file_output_items:
+                item_name_clean = item.name.rstrip("_")
                 if not re.search(r"#+", item_name_clean):
                     item_name_clean = f"{item_name_clean}_######"
                     item.name = item_name_clean
-
-            print(
-                f"[driver] File output: {new_base}/{item_name_clean} "
-                f"(frame %d.{item.format.file_format.lower()})"
-            )
+                print(
+                    f"[driver] File output: {new_base}/{item_name_clean}"
+                )
 
         remapped += 1
         if not node.file_output_items:
