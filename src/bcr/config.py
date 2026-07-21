@@ -6,10 +6,29 @@ from typing import Optional
 
 # --- Blender ---
 BLENDER_VERSION = "5.2.0"
-BLENDER_DOWNLOAD_URL = (
-    f"https://download.blender.org/release/Blender{BLENDER_VERSION[:3]}/"
-    f"blender-{BLENDER_VERSION}-linux-x64.tar.xz"
-)
+BLENDER_DEFAULT_VERSION = BLENDER_VERSION
+
+# URL base para descargar listado de versiones y archivos
+BLENDER_RELEASE_BASE = "https://download.blender.org/release/"
+
+
+def build_blender_download_url(version: str) -> str:
+    """Construye la URL de descarga para una version especifica de Blender.
+
+    Args:
+        version: Version semantica (ej. "5.2.0").
+
+    Returns:
+        URL completa al .tar.xz de Linux x64.
+    """
+    major_minor = ".".join(version.split(".")[:2])
+    return (
+        f"{BLENDER_RELEASE_BASE}Blender{major_minor}/"
+        f"blender-{version}-linux-x64.tar.xz"
+    )
+
+
+BLENDER_DOWNLOAD_URL = build_blender_download_url(BLENDER_VERSION)
 BLENDER_DIR_NAME = f"blender-{BLENDER_VERSION}-linux-x64"
 
 # El binario dentro del .tar.xz (Blender >= 4.0 lo movio de sitio)

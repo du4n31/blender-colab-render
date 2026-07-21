@@ -17,6 +17,7 @@ from typing import Callable, Optional
 
 from bcr.config import BACKLOG_LIMIT, RENDER_OUTPUT_PATTERN, extract_frame_number
 from bcr.drive_sync import DriveSyncError, remove_local, upload_frame
+from bcr.local_export import LocalExportError, check_disk_space, package_output, trigger_download
 from bcr.state_manager import reconcile_with_files, save_state
 
 
@@ -52,6 +53,7 @@ class RenderOrchestrator:
         frame_end: int = 1,
         device: str = "OPTIX",
         output_mode: str = "compositor",
+        output_target: str = "drive",
         custom_script_paths: Optional[list[Path]] = None,
         progress_callback: Optional[ProgressCallback] = None,
     ):
@@ -64,6 +66,7 @@ class RenderOrchestrator:
         self.frame_end = frame_end
         self.device = device
         self.output_mode = output_mode
+        self.output_target = output_target
         self.custom_script_paths = custom_script_paths or []
         self.progress_callback = progress_callback
 
@@ -141,8 +144,14 @@ class RenderOrchestrator:
         """Ejecuta el proceso de render completo.
 
         Lanza Blender como subproceso, monitoriza stdout en tiempo real,
-        y sube frames a Drive concurrentemente.
+        y segun ``output_target`` sube frames a Drive incrementalmente
+        o los mantiene locales para empaquetar al final.
         """
+        if self.output_target == "zip_download":
+            ok, msg = check_disk_space(self.output_dir)
+            if not ok:
+                print(f"[orchestrator] ADVERTENCIA: {msg}", file=sys.stderr)
+
         cmd = self.build_command()
         print(f"[orchestrator] Comando: {' '.join(cmd)}")
 
@@ -161,7 +170,7 @@ class RenderOrchestrator:
             raise RenderError(msg) from exc
 
         self._current_frame = 0
-        self._uploaded_paths: set[str] = set()  # rutas ya subidas
+        self._uploaded_paths: set[str] = set()  # rutas ya procesadas
         upload_pool = ThreadPoolExecutor(max_workers=2)
 
         try:
@@ -180,7 +189,7 @@ class RenderOrchestrator:
                     if not self._is_valid_output_path(local_path):
                         continue
 
-                    # Saltar si ya subimos esta ruta exacta
+                    # Saltar si ya procesamos esta ruta exacta
                     path_key = str(local_path)
                     if path_key in self._uploaded_paths:
                         continue
@@ -193,23 +202,27 @@ class RenderOrchestrator:
                         self._frame_times.append(now)
                         self._update_metrics()
 
-                    # Encolar subida (usa la ruta exacta, no busca por frame)
-                    # Calcula el subdirectorio relativo para organizar por nodo
-                    if local_path.exists():
-                        self._pending_frames.add(frame_num)
-                        subdir = self._compute_subdir(local_path)
-                        future = upload_pool.submit(
-                            self._upload_and_cleanup,
-                            local_path,
-                            frame_num,
-                            subdir,
-                        )
-                        self._upload_futures.append(future)
+                    if self.output_target == "drive":
+                        # Encolar subida a Drive (en paralelo con el render)
+                        if local_path.exists():
+                            self._pending_frames.add(frame_num)
+                            subdir = self._compute_subdir(local_path)
+                            future = upload_pool.submit(
+                                self._upload_and_cleanup,
+                                local_path,
+                                frame_num,
+                                subdir,
+                            )
+                            self._upload_futures.append(future)
+                    elif self.output_target == "zip_download":
+                        # En modo zip_download los frames se quedan en disco
+                        pass
 
-                    # Verificar backlog
-                    self._wait_if_backlogged()
+                    # Verificar backlog (solo en modo drive)
+                    if self.output_target == "drive":
+                        self._wait_if_backlogged()
 
-            # Esperar a que terminen todas las subidas
+            # Esperar a que terminen todas las subidas (modo drive)
             for future in as_completed(self._upload_futures):
                 try:
                     future.result()
@@ -220,8 +233,11 @@ class RenderOrchestrator:
             upload_pool.shutdown(wait=True)
             self._cleanup_process()
 
-        # Reconciliacion final
-        self._reconcile_pending()
+        # Finalizar segun modo
+        if self.output_target == "drive":
+            self._reconcile_pending()
+        elif self.output_target == "zip_download":
+            self._finalize_zip_download()
 
     # ------------------------------------------------------------------
     # Parseo de stdout
@@ -409,6 +425,32 @@ class RenderOrchestrator:
                 avg_time=self._avg_time,
                 eta=eta,
                 upload_queue_size=len(self._pending_frames),
+            )
+
+    # ------------------------------------------------------------------
+    # Finalizacion zip_download
+    # ------------------------------------------------------------------
+
+    def _finalize_zip_download(self) -> None:
+        """Empaqueta y descarga el output completo como .zip en modo zip_download."""
+        print("[orchestrator] Empaquetando resultado como .zip...", file=sys.stderr)
+        if not self.output_dir.exists():
+            print(
+                f"[orchestrator] No hay directorio de salida: {self.output_dir}",
+                file=sys.stderr,
+            )
+            return
+        try:
+            zip_path = package_output(self.output_dir)
+            print(
+                f"[orchestrator] .zip creado: {zip_path} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)",
+                file=sys.stderr,
+            )
+            trigger_download(zip_path)
+        except LocalExportError as exc:
+            print(
+                f"[orchestrator] Error al empaquetar: {exc}",
+                file=sys.stderr,
             )
 
     # ------------------------------------------------------------------

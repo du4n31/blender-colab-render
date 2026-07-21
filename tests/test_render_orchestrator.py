@@ -7,10 +7,12 @@ Estas pruebas validan la logica que NO depende de una GPU real:
 """
 
 import re
-from pathlib import Path
+import shutil
+import tempfile
+import unittest
 from datetime import timedelta
-
-import pytest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from bcr.render_orchestrator import RenderOrchestrator
 
@@ -430,3 +432,125 @@ class TestComputeSubdir:
         orch = self.make_orch(tmp_output_dir)
         path = Path("/tmp/unrelated/file.exr")
         assert orch._compute_subdir(path) == ""
+
+
+class TestOutputTarget(unittest.TestCase):
+    """Prueba el parametro output_target de RenderOrchestrator."""
+
+    def test_default_output_target_is_drive(self) -> None:
+        """Default output_target is 'drive'."""
+        orch = RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/s.blend"),
+            output_dir=Path("/tmp/render"),
+            drive_output_dir=Path("/drive/o"),
+            blender_scripts_dir=Path("/scripts"),
+        )
+        self.assertEqual(orch.output_target, "drive")
+
+    def test_explicit_drive_accepted(self) -> None:
+        """Explicit 'drive' is accepted."""
+        orch = RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/s.blend"),
+            output_dir=Path("/tmp/render"),
+            drive_output_dir=Path("/drive/o"),
+            blender_scripts_dir=Path("/scripts"),
+            output_target="drive",
+        )
+        self.assertEqual(orch.output_target, "drive")
+
+    def test_explicit_zip_download_accepted(self) -> None:
+        """Explicit 'zip_download' is accepted (no crash)."""
+        orch = RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/s.blend"),
+            output_dir=Path("/tmp/render"),
+            drive_output_dir=Path("/drive/o"),
+            blender_scripts_dir=Path("/scripts"),
+            output_target="zip_download",
+        )
+        self.assertEqual(orch.output_target, "zip_download")
+
+    def test_imports_without_error(self) -> None:
+        """Orchestrator imports when both drive_sync and local_export are available."""
+        from bcr import drive_sync
+        from bcr import local_export
+
+        self.assertIsNotNone(drive_sync)
+        self.assertIsNotNone(local_export)
+
+
+class TestFinalizeZipDownload(unittest.TestCase):
+    """Prueba _finalize_zip_download en modo zip_download."""
+
+    def setUp(self) -> None:
+        self._tmpdir = Path(tempfile.mkdtemp())
+        self._output_dir = self._tmpdir / "render_output"
+        self._output_dir.mkdir()
+        (self._output_dir / "frame_000001.exr").write_text("test frame")
+
+        self.orch = RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/s.blend"),
+            output_dir=self._output_dir,
+            drive_output_dir=Path("/drive/o"),
+            blender_scripts_dir=Path("/scripts"),
+            frame_start=1,
+            frame_end=10,
+            output_target="zip_download",
+        )
+
+    def tearDown(self) -> None:
+        shutil.rmtree(str(self._tmpdir), ignore_errors=True)
+
+    @patch("bcr.render_orchestrator.package_output")
+    @patch("bcr.render_orchestrator.trigger_download")
+    def test_finalize_calls_package_output(
+        self, mock_trigger: MagicMock, mock_package: MagicMock
+    ) -> None:
+        """_finalize_zip_download calls package_output with correct output_dir."""
+        zip_result = self._tmpdir / "test_output.zip"
+        zip_result.write_text("dummy zip")
+        mock_package.return_value = zip_result
+
+        self.orch._finalize_zip_download()
+
+        mock_package.assert_called_once_with(self._output_dir)
+
+    @patch("bcr.render_orchestrator.package_output")
+    @patch("bcr.render_orchestrator.trigger_download")
+    def test_finalize_calls_trigger_download(
+        self, mock_trigger: MagicMock, mock_package: MagicMock
+    ) -> None:
+        """_finalize_zip_download calls trigger_download with the zip path."""
+        zip_result = self._tmpdir / "test_output.zip"
+        zip_result.write_text("dummy zip")
+        mock_package.return_value = zip_result
+
+        self.orch._finalize_zip_download()
+
+        mock_trigger.assert_called_once_with(zip_result)
+
+    @patch("bcr.render_orchestrator.package_output")
+    @patch("bcr.render_orchestrator.trigger_download")
+    def test_graceful_handling_missing_output_dir(
+        self, mock_trigger: MagicMock, mock_package: MagicMock
+    ) -> None:
+        """When output_dir doesn't exist, no crash and no packaging."""
+        orch = RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/s.blend"),
+            output_dir=Path("/nonexistent/path"),
+            drive_output_dir=Path("/drive/o"),
+            blender_scripts_dir=Path("/scripts"),
+            frame_start=1,
+            frame_end=10,
+            output_target="zip_download",
+        )
+
+        # Should not raise any exception
+        orch._finalize_zip_download()
+
+        mock_package.assert_not_called()
+        mock_trigger.assert_not_called()

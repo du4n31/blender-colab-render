@@ -1,85 +1,91 @@
 """Carga y gestion de scripts Python personalizados para el render.
 
-Los scripts se descargan desde URLs y se pasan a Blender via --python adicional.
+Los scripts se adquieren desde URLs, subida directa o Drive usando
+source_resolver, y se pasan a Blender via --python adicional.
 """
 
-import os
+import sys
 from pathlib import Path
 from typing import Optional
 
-import requests
+from bcr.source_resolver import (
+    SourceAcquisitionError,
+    acquire_source,
+    resolve_zip_contents,
+)
 
 
 class ScriptLoadError(Exception):
-    """Error al descargar o cargar un script personalizado."""
+    """Error al adquirir o cargar un script personalizado."""
 
 
-def download_custom_script(url: str, dest_dir: Path, filename: Optional[str] = None) -> Path:
-    """Descarga un script Python desde una URL.
+def acquire_script(method: str, value: str, dest_dir: Path) -> Path:
+    """Adquiere un script Python desde un enlace, subida o ruta de Drive.
 
     Args:
-        url: URL del script .py.
+        method: ``"link"``, ``"upload"`` o ``"drive_path"``.
+        value: URL, ruta en Drive, o ignorado para ``"upload"``.
         dest_dir: Directorio destino.
-        filename: Nombre opcional para el archivo (default: ultimo segmento de la URL).
 
     Returns:
-        Ruta al archivo descargado.
+        Ruta al archivo .py adquirido.
 
     Raises:
-        ScriptLoadError: si la descarga falla o el contenido no es .py.
+        ScriptLoadError: si falla la adquisicion o el archivo no es .py.
     """
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
-
-    if filename is None:
-        filename = url.rstrip("/").split("/")[-1]
-    if not filename.endswith(".py"):
-        filename += ".py"
-
-    dest_path = dest_dir / filename
+    tmp_dir = dest_dir / "_src"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        resp = requests.get(url, timeout=60, stream=True)
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        msg = f"Error al descargar script {url}: {exc}"
-        raise ScriptLoadError(msg) from exc
+        local_path = acquire_source(method, value, tmp_dir)
+    except SourceAcquisitionError as exc:
+        raise ScriptLoadError(str(exc)) from exc
 
-    with open(dest_path, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
+    # Si es .zip, extraer y localizar entry point
+    if local_path.suffix == ".zip":
+        try:
+            result = resolve_zip_contents(local_path, dest_dir, kind="script")
+        except SourceAcquisitionError as exc:
+            raise ScriptLoadError(str(exc)) from exc
+        # result = [entry_point, extracted_dir]
+        entry_point, extracted_dir = result[0], result[1]
+        # Agregar el directorio extraido a sys.path para imports relativos
+        sys.path.insert(0, str(extracted_dir))
+        return entry_point
 
-    # Validacion basica
-    if not dest_path.exists():
-        msg = f"El archivo descargado no existe: {dest_path}"
-        raise ScriptLoadError(msg)
+    # Si no es .py, renombrar
+    if local_path.suffix != ".py":
+        new_path = local_path.with_suffix(".py")
+        local_path.rename(new_path)
+        local_path = new_path
 
-    file_size = dest_path.stat().st_size
-    if file_size == 0:
-        os.remove(str(dest_path))
-        msg = f"El archivo descargado esta vacio: {url}"
-        raise ScriptLoadError(msg)
-
-    return dest_path
+    return local_path
 
 
-def collect_script_args(script_urls: list[str], tmp_dir: Path) -> list[str]:
+def collect_script_args(
+    sources: list[tuple[str, str]],
+    tmp_dir: Path,
+) -> list[str]:
     """Genera argumentos --python adicionales para pasar a Blender.
 
     Args:
-        script_urls: Lista de URLs de scripts .py.
-        tmp_dir: Directorio temporal donde descargar los scripts.
+        sources: Lista de ``(method, value)``.
+            method: ``"link"``, ``"upload"`` o ``"drive_path"``.
+            value: URL, ruta en Drive, o ``""`` para ``"upload"``.
+        tmp_dir: Directorio temporal donde adquirir los scripts.
 
     Returns:
-        Lista de argumentos para subprocess: ['--python', '/ruta/script1.py', ...]
+        Lista de argumentos para subprocess: ``['--python', '/ruta/script1.py', ...]``
     """
     args: list[str] = []
-    for url in script_urls:
-        if not url or not url.strip():
+    for method, value in sources:
+        if not method or not method.strip():
             continue
-        url = url.strip()
-        script_path = download_custom_script(url, tmp_dir)
+        method = method.strip()
+        value = (value or "").strip()
+        script_path = acquire_script(method, value, tmp_dir)
         args.append("--python")
         args.append(str(script_path))
     return args
