@@ -4,6 +4,7 @@ Valida adquisicion por link, upload, drive_path y resolucion de ZIPs.
 """
 
 import shutil
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -143,9 +144,16 @@ class TestAcquireSourceUpload(unittest.TestCase):
         shutil.rmtree(str(self._tmpdir), ignore_errors=True)
 
     def test_upload_raises_outside_colab(self) -> None:
-        """Fuera de Colab, upload lanza SourceAcquisitionError."""
-        with patch("builtins.__import__") as mock_import:
-            mock_import.side_effect = ImportError("Not in Colab")
+        """Fuera de Colab, upload lanza SourceAcquisitionError.
+
+        Se simula la ausencia de google.colab poniendo su entrada en
+        sys.modules en None (comportamiento estandar de Python: cualquier
+        import de ese nombre lanza ImportError). Esto es preferible a
+        parchear builtins.__import__ globalmente, que intercepta tambien
+        imports internos no relacionados (p. ej. el import diferido de
+        ntpath dentro de pathlib) y puede producir fallos espurios.
+        """
+        with patch.dict(sys.modules, {"google.colab": None, "google": None}):
             with self.assertRaises(SourceAcquisitionError) as ctx:
                 acquire_source("upload", "", self._tmpdir)
             self.assertIn(
