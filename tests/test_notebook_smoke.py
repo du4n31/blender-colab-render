@@ -45,7 +45,8 @@ class TestPackageImports:
 
     def test_import_custom_script_loader(self):
         from bcr import custom_script_loader
-        assert hasattr(custom_script_loader, "download_custom_script")
+        assert hasattr(custom_script_loader, "acquire_script")
+        assert hasattr(custom_script_loader, "collect_script_args")
 
 
 class TestConfigValidation:
