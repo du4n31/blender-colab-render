@@ -204,21 +204,21 @@ class TestParseSavedLine:
 
     def test_saved_line_standard(self):
         """Linea Saved: estandar."""
-        line = "Saved: '/content/render_tmp/frame_00001.png'"
+        line = "Saved: '/content/render_tmp/frame_000001.png'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
         frame_num, path = result
         assert frame_num == 1
-        assert str(path) == "/content/render_tmp/frame_00001.png"
+        assert str(path) == "/content/render_tmp/frame_000001.png"
 
     def test_saved_line_high_number(self):
         """Linea Saved: con numero de frame alto."""
-        line = "Saved: '/content/render_tmp/frame_12345.png'"
+        line = "Saved: '/content/render_tmp/frame_012345.png'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
         frame_num, path = result
         assert frame_num == 12345
-        assert str(path) == "/content/render_tmp/frame_12345.png"
+        assert str(path) == "/content/render_tmp/frame_012345.png"
 
     def test_not_a_saved_line(self):
         """Linea que no es de Saved: devuelve None."""
@@ -228,22 +228,22 @@ class TestParseSavedLine:
 
     def test_saved_with_timestamp(self):
         """Linea Saved con path temporal."""
-        line = "Saved: '/tmp/blender_XXXXXX/frame_00001.png'"
+        line = "Saved: '/tmp/blender_XXXXXX/frame_000001.png'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
         frame_num, path = result
         assert frame_num == 1
-        assert str(path) == "/tmp/blender_XXXXXX/frame_00001.png"
+        assert str(path) == "/tmp/blender_XXXXXX/frame_000001.png"
 
     def test_saved_blender_stdout_pattern(self):
         """Patron real de stdout de Blender."""
         lines = [
             "Fra:1 Mem:42.35M ( Peak: 45.12M ) | Time: 00:00.53",
-            "Saved: '/content/render_tmp/frame_00001.png'",
+            "Saved: '/content/render_tmp/frame_000001.png'",
             " Time: 00:00.53 (Saving: 00:00.08)",
             "",
             "Fra:2 Mem:42.35M ( Peak: 45.12M ) | Time: 00:00.48",
-            "Saved: '/content/render_tmp/frame_00002.png'",
+            "Saved: '/content/render_tmp/frame_000002.png'",
             " Time: 00:00.48 (Saving: 00:00.06)",
         ]
         frames = []
@@ -256,8 +256,8 @@ class TestParseSavedLine:
                 paths.append(str(path))
         assert frames == [1, 2]
         assert paths == [
-            "/content/render_tmp/frame_00001.png",
-            "/content/render_tmp/frame_00002.png",
+            "/content/render_tmp/frame_000001.png",
+            "/content/render_tmp/frame_000002.png",
         ]
 
     def test_no_frame_number_in_path(self):
@@ -268,30 +268,30 @@ class TestParseSavedLine:
 
     def test_saved_exr_standard(self):
         """Linea Saved: con archivo EXR (File Output node)."""
-        line = "Saved: '/content/render_tmp/File_Output_node0001.exr'"
+        line = "Saved: '/content/render_tmp/File_Output_node000001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
         frame_num, path = result
         assert frame_num == 1
-        assert str(path) == "/content/render_tmp/File_Output_node0001.exr"
+        assert str(path) == "/content/render_tmp/File_Output_node000001.exr"
 
     def test_saved_exr_with_frame_in_name(self):
         """Linea Saved: con EXR que tiene frame_ en el nombre."""
-        line = "Saved: '/content/render_tmp/my_slot_frame_0001.exr'"
+        line = "Saved: '/content/render_tmp/my_slot_frame_000001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
         frame_num, path = result
         assert frame_num == 1
-        assert str(path) == "/content/render_tmp/my_slot_frame_0001.exr"
+        assert str(path) == "/content/render_tmp/my_slot_frame_000001.exr"
 
     def test_saved_exr_high_frame_number(self):
         """Linea Saved: con EXR de frame alto."""
-        line = "Saved: '/content/render_tmp/beauty_0128.exr'"
+        line = "Saved: '/content/render_tmp/beauty_000128.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
         frame_num, path = result
         assert frame_num == 128
-        assert str(path) == "/content/render_tmp/beauty_0128.exr"
+        assert str(path) == "/content/render_tmp/beauty_000128.exr"
 
     def test_discard_file_ignored(self):
         """Archivos _discard_ o _render_result_ se ignoran (salida directa)."""
@@ -305,19 +305,19 @@ class TestParseSavedLine:
 
     def test_saved_exr_multiple_digits(self):
         """Linea Saved: con EXR que tiene digitos multiples en el path."""
-        line = "Saved: '/content/render_tmp/Result_0001.exr'"
+        line = "Saved: '/content/render_tmp/Result_000001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
         frame_num, path = result
         assert frame_num == 1
-        assert str(path) == "/content/render_tmp/Result_0001.exr"
+        assert str(path) == "/content/render_tmp/Result_000001.exr"
 
     def test_saved_multiple_formats_same_frame(self):
         """Multiples formatos para el mismo frame."""
         lines = [
-            "Saved: '/content/render_tmp/_discard_0001.png'",
-            "Saved: '/content/render_tmp/beauty_0001.exr'",
-            "Saved: '/content/render_tmp/light_0001.exr'",
+            "Saved: '/content/render_tmp/_discard_000001.png'",
+            "Saved: '/content/render_tmp/beauty_000001.exr'",
+            "Saved: '/content/render_tmp/light_000001.exr'",
         ]
         frames = []
         paths = []
@@ -330,8 +330,8 @@ class TestParseSavedLine:
         # Solo los EXR, no el discard
         assert frames == [1, 1]
         assert paths == [
-            "/content/render_tmp/beauty_0001.exr",
-            "/content/render_tmp/light_0001.exr",
+            "/content/render_tmp/beauty_000001.exr",
+            "/content/render_tmp/light_000001.exr",
         ]
 
     def test_windows_path_still_parsed(self):
@@ -342,7 +342,7 @@ class TestParseSavedLine:
         no en el parseo.
         """
         # Usar un patron que SÍ se pueda parsear (underscore + digitos + .ext)
-        line = "Saved: 'C:\\\\Users\\\\artista\\\\Documents\\\\file_name_0001.exr'"
+        line = "Saved: 'C:\\\\Users\\\\artista\\\\Documents\\\\file_name_000001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
         frame_num, path = result
