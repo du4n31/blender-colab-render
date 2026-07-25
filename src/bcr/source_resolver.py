@@ -107,9 +107,21 @@ def _acquire_from_upload(working_dir: Path) -> Path:
 
 
 def _acquire_from_drive(value: str, working_dir: Path) -> Path:
-    """Copia un archivo desde Google Drive montado en ``/content/drive``."""
-    source = Path(value).resolve()
+    """Copia un archivo desde Google Drive montado en ``/content/drive``.
+
+    ``value`` puede ser una ruta relativa al punto de montaje de Drive
+    (p.ej. "MyDrive/escenas/mi_escena.blend", que es lo que el notebook
+    le pide al usuario) o una ruta absoluta ya dentro de el. Antes,
+    Path(value).resolve() resolvia las rutas relativas contra el
+    directorio de trabajo del proceso (p.ej. /content), no contra Drive,
+    asi que una ruta relativa "correcta" segun las instrucciones del
+    notebook nunca se encontraba.
+    """
+    candidate = Path(value)
     drive_root = DRIVE_MOUNT_POINT.resolve()
+    if not candidate.is_absolute():
+        candidate = drive_root / candidate
+    source = candidate.resolve()
 
     try:
         source.relative_to(drive_root)
