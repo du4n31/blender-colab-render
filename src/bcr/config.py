@@ -42,7 +42,7 @@ STATE_DIR_NAME = "_estado"
 STATE_FILE_NAME = "render_state.json"
 
 # Patron para los frames renderizados (Blender reemplaza ##### por el numero)
-RENDER_OUTPUT_PATTERN = "frame_#####"
+RENDER_OUTPUT_PATTERN = "frame_######"
 
 # --- Subida ---
 BACKLOG_LIMIT = 5  # max frames locales pendientes de subir antes de pausar

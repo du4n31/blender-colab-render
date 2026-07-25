@@ -176,7 +176,7 @@ class TestBuildCommand:
         cmd = orch.build_command()
 
         out_idx = cmd.index("--render-output")
-        assert cmd[out_idx + 1] == "/tmp/r/frame_#####"
+        assert cmd[out_idx + 1] == "/tmp/r/frame_######"
 
     def test_no_render_format_forced(self):
         """NO se fuerza --render-format; el .blend y File Output nodes deciden."""
