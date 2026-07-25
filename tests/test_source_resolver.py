@@ -108,6 +108,24 @@ class TestAcquireSourceDrivePath(unittest.TestCase):
         self.assertTrue(expected.exists())
         self.assertEqual(expected.read_text(), "blend data")
 
+    def test_relative_path_resolves_against_drive_root(self) -> None:
+        """Una ruta relativa (como la que pide el notebook, p.ej.
+        "MyDrive/escenas/mi_escena.blend") debe resolverse contra el
+        punto de montaje de Drive, no contra el cwd del proceso."""
+        (self._drive_root / "MyDrive" / "escenas").mkdir(parents=True)
+        source_file = self._drive_root / "MyDrive" / "escenas" / "mi_escena.blend"
+        source_file.write_text("blend data")
+
+        with patch("bcr.source_resolver.DRIVE_MOUNT_POINT") as mock_drive:
+            mock_drive.resolve.return_value = self._drive_root
+            result = acquire_source(
+                "drive_path", "MyDrive/escenas/mi_escena.blend", self._tmpdir
+            )
+
+        expected = (self._tmpdir / "mi_escena.blend").resolve()
+        self.assertEqual(result, expected)
+        self.assertEqual(expected.read_text(), "blend data")
+
     def test_path_outside_drive_raises(self) -> None:
         """Ruta fuera del punto de montaje de Drive lanza error."""
         outside_file = self._tmpdir / "outside.blend"
