@@ -14,12 +14,13 @@ maquina con Python 3.10+.
 | state_manager | test_state_manager.py | CRUD de estado, reconciliacion contra archivos, corrupcion |
 | progress_ui | test_progress_ui.py | Creacion segura sin ipywidgets, format_timedelta |
 | render_orchestrator | test_render_orchestrator.py | Construccion y orden de args, parseo de stdout, deteccion de Saved: |
+| drive_backend | test_drive_backend.py | Backend de Drive via API (service account): carpetas, subida de frames, listado recursivo, estado, lectura de secretos |
 
 ### Como ejecutar
 
 ```bash
 # Usando uv (recomendado en desarrollo)
-uv run --with pytest,pytest-mock,requests,gdown python -m pytest tests/ -v
+uv run --with pytest,pytest-mock,requests,gdown,google-api-python-client,google-auth python -m pytest tests/ -v
 
 # O con pip en un venv
 python3 -m venv venv
