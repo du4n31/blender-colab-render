@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from bcr.config import BACKLOG_LIMIT, RENDER_OUTPUT_PATTERN, extract_frame_number
+from bcr.drive_backend import DriveBackendError
 from bcr.drive_sync import DriveSyncError, remove_local, upload_frame
 from bcr.local_export import LocalExportError, check_disk_space, package_output, trigger_download
 from bcr.state_manager import reconcile_with_files, save_state
@@ -56,6 +57,7 @@ class RenderOrchestrator:
         output_target: str = "drive",
         custom_script_paths: Optional[list[Path]] = None,
         progress_callback: Optional[ProgressCallback] = None,
+        drive_backend: Optional[object] = None,
     ):
         self.blender_path = Path(blender_path)
         self.blend_file = Path(blend_file)
@@ -69,6 +71,11 @@ class RenderOrchestrator:
         self.output_target = output_target
         self.custom_script_paths = custom_script_paths or []
         self.progress_callback = progress_callback
+        # Backend opcional de Drive (ej. ServiceAccountDriveBackend). Si es
+        # None (default), la subida y el guardado de estado usan el
+        # filesystem montado exactamente como antes -- ver _dispatch_upload
+        # y _dispatch_save_state.
+        self.drive_backend = drive_backend
 
         # Estado interno
         self._process: Optional[subprocess.Popen] = None
@@ -346,6 +353,17 @@ class RenderOrchestrator:
     # Subida a Drive
     # ------------------------------------------------------------------
 
+    def _dispatch_upload(self, local_path: Path, frame_num: int, subdir: str = "") -> None:
+        """Sube un frame usando el backend activo (API) o drive_sync (montado)."""
+        if self.drive_backend is not None:
+            self.drive_backend.upload_frame(local_path, self.drive_output_dir, frame_num, subdir)
+        else:
+            upload_frame(local_path, self.drive_output_dir, frame_num, subdir)
+
+    def _dispatch_save_state(self, last_frame: int, total_frames: int) -> None:
+        """Guarda el estado usando el backend activo (API) o state_manager (montado)."""
+        save_state(self.drive_output_dir, last_frame, total_frames, backend=self.drive_backend)
+
     def _upload_and_cleanup(
         self,
         local_path: Path,
@@ -361,16 +379,15 @@ class RenderOrchestrator:
                 salidas (ej: nombre del nodo File Output).
         """
         try:
-            upload_frame(local_path, self.drive_output_dir, frame_num, subdir)
+            self._dispatch_upload(local_path, frame_num, subdir)
             remove_local(local_path)
             # Actualizar estado en Drive
-            save_state(
-                self.drive_output_dir,
+            self._dispatch_save_state(
                 frame_num,
                 self.frame_end - self.frame_start + 1,
             )
             self._pending_frames.discard(frame_num)
-        except DriveSyncError as exc:
+        except (DriveSyncError, DriveBackendError) as exc:
             print(
                 f"[orchestrator] Error al subir frame {frame_num}: {exc}",
                 file=sys.stderr,
@@ -480,13 +497,13 @@ class RenderOrchestrator:
                     continue
                 try:
                     subdir = self._compute_subdir(f)
-                    upload_frame(f, self.drive_output_dir, frame_num, subdir)
+                    self._dispatch_upload(f, frame_num, subdir)
                     remove_local(f)
                     print(
                         f"[orchestrator] Frame {frame_num} recuperado y subido: {f.name}",
                         file=sys.stderr,
                     )
-                except DriveSyncError as exc:
+                except (DriveSyncError, DriveBackendError) as exc:
                     print(
                         f"[orchestrator] Error en reconciliacion: {exc}",
                         file=sys.stderr,

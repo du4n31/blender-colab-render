@@ -52,19 +52,28 @@ def _state_path(drive_path: Path) -> Path:
     return drive_path / STATE_DIR_NAME / STATE_FILE_NAME
 
 
-def save_state(drive_path: Path, last_frame: int, total_frames: int) -> RenderState:
+def save_state(
+    drive_path: Path, last_frame: int, total_frames: int, backend=None
+) -> RenderState:
     """Guarda el estado del render en Drive.
 
     Crea el directorio de estado si no existe.
 
     Args:
-        drive_path: Ruta base de salida en Drive.
+        drive_path: Ruta base de salida en Drive (o, si se pasa backend,
+            el folder_id de esa carpeta -- ver drive_backend.py).
         last_frame: Ultimo frame completado.
         total_frames: Total de frames del trabajo.
+        backend: Backend opcional (ej. ServiceAccountDriveBackend) para
+            guardar el estado via API en vez del filesystem montado.
+            Por defecto None -- comportamiento identico al actual.
 
     Returns:
         El objeto RenderState guardado.
     """
+    if backend is not None:
+        return backend.save_state(drive_path, last_frame, total_frames)
+
     state = RenderState(
         last_frame=last_frame,
         total_frames=total_frames,
@@ -78,14 +87,24 @@ def save_state(drive_path: Path, last_frame: int, total_frames: int) -> RenderSt
     return state
 
 
-def load_state(drive_path: Path, total_frames: int) -> int:
+def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
     """Carga el ultimo frame confirmado desde el archivo de estado.
+
+    Args:
+        drive_path: Ruta base de salida en Drive (o folder_id si se pasa
+            backend).
+        total_frames: Total de frames esperado para este trabajo.
+        backend: Backend opcional para leer el estado via API. Por
+            defecto None -- comportamiento identico al actual.
 
     Returns:
         El ultimo frame completado (0 si no hay estado previo).
         Si total_frames cambio (nuevo trabajo con distinta duracion),
         se ignora el estado previo.
     """
+    if backend is not None:
+        return backend.load_state(drive_path, total_frames)
+
     path = _state_path(drive_path)
 
     if not path.exists():
@@ -105,7 +124,7 @@ def load_state(drive_path: Path, total_frames: int) -> int:
         return 0
 
 
-def reconcile_with_files(drive_path: Path, state_last_frame: int) -> int:
+def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None) -> int:
     """Reconcilia el ultimo frame contra los archivos realmente presentes en Drive.
 
     Usa el valor mas conservador (menor) entre el estado y los archivos
@@ -113,13 +132,19 @@ def reconcile_with_files(drive_path: Path, state_last_frame: int) -> int:
     caida a mitad de escritura.
 
     Args:
-        drive_path: Ruta de salida en Drive.
+        drive_path: Ruta de salida en Drive (o folder_id si se pasa
+            backend).
         state_last_frame: Ultimo frame segun el archivo de estado.
+        backend: Backend opcional para listar frames via API. Por
+            defecto None -- comportamiento identico al actual.
 
     Returns:
         El ultimo frame confirmado (0 si no hay frames).
     """
-    frames_on_disk = _list_frame_numbers(drive_path)
+    if backend is not None:
+        frames_on_disk = backend.list_frame_numbers(drive_path)
+    else:
+        frames_on_disk = _list_frame_numbers(drive_path)
 
     if not frames_on_disk:
         return 0

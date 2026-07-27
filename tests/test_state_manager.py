@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -128,3 +129,34 @@ class TestReconcileWithFiles:
         (subdir / "frame_000002.exr").touch()
         result = reconcile_with_files(tmp_drive_dir, state_last_frame=10)
         assert result == 2
+
+
+class TestBackendDelegation:
+    """Cuando se pasa un backend, se delega en el en vez de usar el filesystem."""
+
+    def test_save_state_delegates_to_backend(self):
+        backend = Mock()
+        backend.save_state.return_value = RenderState(last_frame=3, total_frames=10)
+        result = save_state("folder_id_123", 3, 10, backend=backend)
+        backend.save_state.assert_called_once_with("folder_id_123", 3, 10)
+        assert result.last_frame == 3
+
+    def test_load_state_delegates_to_backend(self):
+        backend = Mock()
+        backend.load_state.return_value = 7
+        result = load_state("folder_id_123", 10, backend=backend)
+        backend.load_state.assert_called_once_with("folder_id_123", 10)
+        assert result == 7
+
+    def test_reconcile_with_files_delegates_to_backend(self):
+        backend = Mock()
+        backend.list_frame_numbers.return_value = [1, 2, 3]
+        result = reconcile_with_files("folder_id_123", state_last_frame=5, backend=backend)
+        backend.list_frame_numbers.assert_called_once_with("folder_id_123")
+        assert result == 3
+
+    def test_reconcile_with_files_backend_empty_returns_zero(self):
+        backend = Mock()
+        backend.list_frame_numbers.return_value = []
+        result = reconcile_with_files("folder_id_123", state_last_frame=5, backend=backend)
+        assert result == 0

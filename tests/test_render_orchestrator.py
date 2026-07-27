@@ -554,3 +554,77 @@ class TestFinalizeZipDownload(unittest.TestCase):
 
         mock_package.assert_not_called()
         mock_trigger.assert_not_called()
+
+
+class TestDriveBackendDispatch(unittest.TestCase):
+    """Prueba que drive_backend (opcional) se use en vez de drive_sync/state_manager."""
+
+    def setUp(self) -> None:
+        self._tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self) -> None:
+        shutil.rmtree(str(self._tmpdir), ignore_errors=True)
+
+    def _make_orch(self, drive_backend=None) -> RenderOrchestrator:
+        return RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/s.blend"),
+            output_dir=self._tmpdir,
+            drive_output_dir=Path("/drive/o"),
+            blender_scripts_dir=Path("/scripts"),
+            frame_start=1,
+            frame_end=5,
+            drive_backend=drive_backend,
+        )
+
+    def test_default_drive_backend_is_none(self) -> None:
+        orch = self._make_orch()
+        self.assertIsNone(orch.drive_backend)
+
+    def test_upload_and_cleanup_uses_module_functions_when_no_backend(self) -> None:
+        orch = self._make_orch(drive_backend=None)
+        local_file = self._tmpdir / "frame_000001.png"
+        local_file.write_bytes(b"x")
+
+        with patch(
+            "bcr.render_orchestrator.upload_frame"
+        ) as mock_upload, patch(
+            "bcr.render_orchestrator.save_state"
+        ) as mock_save_state:
+            orch._upload_and_cleanup(local_file, frame_num=1)
+
+        mock_upload.assert_called_once_with(local_file, orch.drive_output_dir, 1, "")
+        mock_save_state.assert_called_once()
+        # save_state se llamo sin backend (None), el default
+        self.assertIsNone(mock_save_state.call_args.kwargs.get("backend"))
+
+    def test_upload_and_cleanup_uses_backend_when_provided(self) -> None:
+        backend = MagicMock()
+        orch = self._make_orch(drive_backend=backend)
+        local_file = self._tmpdir / "frame_000001.png"
+        local_file.write_bytes(b"x")
+
+        with patch("bcr.render_orchestrator.upload_frame") as mock_upload:
+            orch._upload_and_cleanup(local_file, frame_num=1)
+
+        # el modulo drive_sync.upload_frame NO se llama cuando hay backend
+        mock_upload.assert_not_called()
+        backend.upload_frame.assert_called_once_with(local_file, orch.drive_output_dir, 1, "")
+        backend.save_state.assert_called_once()
+        # el archivo local se borro igual, sin importar el backend
+        self.assertFalse(local_file.exists())
+
+    def test_upload_and_cleanup_catches_backend_error(self) -> None:
+        from bcr.drive_backend import DriveBackendError
+
+        backend = MagicMock()
+        backend.upload_frame.side_effect = DriveBackendError("carpeta no accesible")
+        orch = self._make_orch(drive_backend=backend)
+        local_file = self._tmpdir / "frame_000001.png"
+        local_file.write_bytes(b"x")
+
+        # no debe propagar la excepcion -- se atrapa y se loguea, igual que DriveSyncError
+        orch._upload_and_cleanup(local_file, frame_num=1)
+
+        # como fallo la subida, el archivo local NO se borra
+        self.assertTrue(local_file.exists())
