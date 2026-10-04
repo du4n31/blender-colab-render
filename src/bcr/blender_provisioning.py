@@ -68,7 +68,7 @@ def get_blender_path(
         print(f"[blender] Downloading Blender from {download_url}")
         _download_file(download_url, tar_path)
 
-    # 2. Extraer
+    # 2. Extract
     extract_dir = tmp_dir / "extracted"
     if extract_dir.exists():
         shutil.rmtree(str(extract_dir))
@@ -115,7 +115,7 @@ def _find_blender_binary(extract_dir: Path) -> Optional[Path]:
     if candidate.exists():
         return candidate
 
-    # Fallback: buscar recursivamente
+    # Fallback: search recursively
     for root, _dirs, files in os.walk(str(extract_dir)):
         for fname in files:
             if fname == "blender" and not os.access(
@@ -148,7 +148,7 @@ def verify_blender_version(blender_path: Path) -> str:
 def fetch_available_versions(min_major: int = 5) -> list[str]:
     """Fetch available Blender versions >= min_major.
 
-    Hace GET a BLENDER_RELEASE_BASE, parsea el HTML autoindex en busca de
+    Send a GET request to BLENDER_RELEASE_BASE and parse the autoindex HTML for
     version folders matching ``BlenderX.Y/``, filter major >= min_major,
     and inspect each folder for the Linux x64 .tar.xz archive to determine
     el parche exacto.
@@ -200,10 +200,10 @@ def fetch_available_versions(min_major: int = 5) -> list[str]:
 
 
 def resolve_blender_version(preferred: Optional[str] = None) -> str:
-    """Resuelve la version de Blender a usar.
+    """Resolve the Blender version to use.
 
     Si se provee ``preferred``, lo intenta primero (puede venir del selector
-    UI del notebook). Si la consulta en vivo falla, retorna la version
+    notebook UI). If the live query fails, return the
     preferida o la default con una advertencia.
 
     Returns:
