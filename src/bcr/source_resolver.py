@@ -1,6 +1,6 @@
-"""Generaliza la adquisicion de archivos para Blender Colab Render.
+"""Generalize file acquisition for Blender Colab Render.
 
-Reemplaza link_resolver.py como capa de adquisicion externa.
+Replaces link_resolver.py as the external acquisition layer.
 link_resolver.py se mantiene como detalle interno de la implementacion.
 """
 
@@ -31,7 +31,7 @@ def acquire_source(method: str, value: str, working_dir: Path) -> Path:
         Resolved path to the acquired file.
 
     Raises:
-        SourceAcquisitionError: si falla la adquisicion.
+        SourceAcquisitionError: if acquisition fails.
     """
     working_dir = Path(working_dir)
     working_dir.mkdir(parents=True, exist_ok=True)
@@ -130,14 +130,14 @@ def _acquire_from_drive(value: str, working_dir: Path) -> Path:
         raise SourceAcquisitionError(msg) from None
 
     if not source.exists():
-        msg = f"El archivo no existe en Drive: {source}"
+        msg = f"File does not exist in Drive: {source}"
         raise SourceAcquisitionError(msg)
 
     dest_path = working_dir / source.name
     try:
         shutil.copy2(str(source), str(dest_path))
     except OSError as exc:
-        msg = f"Failed to copy '{source}' a '{dest_path}': {exc}"
+        msg = f"Failed to copy '{source}' to '{dest_path}': {exc}"
         raise SourceAcquisitionError(msg) from exc
 
     return dest_path.resolve()
@@ -184,7 +184,7 @@ def resolve_zip_contents(
             _check_zip_slip(zf, extract_dir)
             zf.extractall(str(extract_dir))
     except zipfile.BadZipFile as exc:
-        msg = f"El archivo no es un ZIP valido: {local_path}"
+        msg = f"File is not a valid ZIP archive: {local_path}"
         raise SourceAcquisitionError(msg) from exc
 
     if kind == "blend":
@@ -192,7 +192,7 @@ def resolve_zip_contents(
     if kind == "script":
         return _resolve_script_in_dir(extract_dir)
 
-    msg = f"Tipo desconocido: '{kind}'. Usa 'blend' o 'script'."
+    msg = f"Unknown content type: '{kind}'. Use 'blend' or 'script'."
     raise SourceAcquisitionError(msg)
 
 
@@ -242,7 +242,7 @@ def _resolve_script_in_dir(extract_dir: Path) -> list[Path]:
         if not entry_path.exists():
             msg = (
                 f"entry_point.txt senala a '{entry_rel}' "
-                f"pero no existe en {extract_dir}"
+                f"but it does not exist in {extract_dir}"
             )
             raise SourceAcquisitionError(msg)
         return [entry_path, extract_dir.resolve()]
