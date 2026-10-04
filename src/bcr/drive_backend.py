@@ -18,7 +18,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from bcr.config import STATE_DIR_NAME, STATE_FILE_NAME, extract_frame_number
+from bcr.config import RENDERED_IMAGE_EXTENSIONS, STATE_DIR_NAME, STATE_FILE_NAME, extract_frame_number
 from bcr.state_manager import RenderState
 
 _FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
@@ -312,6 +312,8 @@ class ServiceAccountDriveBackend:
                     if entry.get("mimeType") == _FOLDER_MIME_TYPE:
                         stack.append(entry["id"])
                     else:
+                        if Path(entry["name"]).suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                            continue
                         frame_num = extract_frame_number(entry["name"])
                         if frame_num is not None:
                             frames.append(frame_num)
