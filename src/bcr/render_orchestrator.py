@@ -19,7 +19,7 @@ from bcr.config import BACKLOG_LIMIT, RENDER_OUTPUT_PATTERN, extract_frame_numbe
 from bcr.drive_backend import DriveBackendError
 from bcr.drive_sync import DriveSyncError, remove_local, upload_frame
 from bcr.local_export import LocalExportError, check_disk_space, package_output, trigger_download
-from bcr.state_manager import reconcile_with_files, save_state
+from bcr.state_manager import load_state, reconcile_with_files, save_state
 
 
 class RenderError(Exception):
@@ -159,10 +159,26 @@ class RenderOrchestrator:
             if not ok:
                 print(f"[orchestrator] ADVERTENCIA: {msg}", file=sys.stderr)
 
-        cmd = self.build_command()
-        print(f"[orchestrator] Comando: {' '.join(cmd)}")
-
         total_frames = self.frame_end - self.frame_start + 1
+
+        # Resume from durable Drive output, not from the state file alone.
+        # Reconcile the checkpoint against files actually present in storage.
+        if self.output_target == "drive":
+            saved_frame = load_state(
+                self.drive_output_dir, total_frames, backend=self.drive_backend
+            )
+            confirmed_frame = reconcile_with_files(
+                self.drive_output_dir, saved_frame, backend=self.drive_backend
+            )
+            if confirmed_frame >= self.frame_start:
+                if confirmed_frame >= self.frame_end:
+                    print("[orchestrator] All requested frames are already present; nothing to render.")
+                    return
+                self.frame_start = confirmed_frame + 1
+                print(f"[orchestrator] Resuming from frame {self.frame_start} (frame {confirmed_frame} is confirmed).")
+
+        cmd = self.build_command()
+        print(f"[orchestrator] Command: {' '.join(cmd)}")
 
         try:
             self._process = subprocess.Popen(
