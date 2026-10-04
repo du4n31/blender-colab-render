@@ -31,7 +31,7 @@ def acquire_script(method: str, value: str, dest_dir: Path) -> Path:
         Path to the acquired .py file.
 
     Raises:
-        ScriptLoadError: si falla la adquisicion o el archivo no es .py.
+        ScriptLoadError: if acquisition fails or the file is not a .py file.
     """
     dest_dir = Path(dest_dir)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -73,8 +73,8 @@ def collect_script_args(
     Args:
         sources: Lista de ``(method, value)``.
             method: ``"link"``, ``"upload"`` o ``"drive_path"``.
-            value: URL, ruta en Drive, o ``""`` para ``"upload"``.
-        tmp_dir: Directorio temporal donde adquirir los scripts.
+            value: URL or Drive path; use ``""`` for ``"upload"``.
+        tmp_dir: Temporary directory for acquiring scripts.
 
     Returns:
         Lista de argumentos para subprocess: ``['--python', '/ruta/script1.py', ...]``
