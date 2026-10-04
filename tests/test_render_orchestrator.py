@@ -376,6 +376,12 @@ class TestValidateOutputPath:
         valid_path = tmp_output_dir / "frame_00001.png"
         assert orch._is_valid_output_path(valid_path)
 
+    def test_rejects_path_traversal(self, tmp_output_dir: Path):
+        """Reject paths that escape output_dir through parent segments."""
+        orch = self.make_orch(tmp_output_dir)
+        bad_path = tmp_output_dir / ".." / "escaped" / "frame_000001.exr"
+        assert not orch._is_valid_output_path(bad_path)
+
     def test_rejects_windows_path(self, tmp_output_dir: Path):
         """Ruta Windows C:\\... es rechazada."""
         orch = self.make_orch(tmp_output_dir)
