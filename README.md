@@ -1,94 +1,53 @@
 # Blender Colab Render
 
-Renderiza escenas de Blender usando las GPUs T4 gratuitas de Google Colab.
+Render Blender scenes in Google Colab, with optional GPU acceleration and incremental delivery of rendered frames to Google Drive.
 
-Cada frame se sube a Drive individualmente apenas termina, en paralelo con el render del frame siguiente. Si la sesion de Colab se interrumpe, puedes reanudar desde el ultimo frame confirmado.
+Each completed frame can be uploaded individually while Blender renders subsequent frames. For Drive output, the project can reconcile saved state with existing output files to resume an interrupted render. Resume behavior depends on the selected output destination and must be validated against the actual scene and storage backend.
 
-## Requisitos
+## Requirements
 
-- Cuenta de Google con Google Drive
-- Una escena de Blender lista para renderizar
-- Enlace publico al archivo `.blend` (subido a Drive, Dropbox, MediaFire o enlace directo)
+- A Google account with access to Google Drive.
+- A Blender `.blend` scene with its required assets available.
+- A public or otherwise accessible scene URL, a Drive path, or a local upload.
+- A Google Colab runtime. GPU availability depends on the runtime assigned by Google.
 
-## Como usar
+## Quick start
 
-### 1. Abrir el notebook en Colab
+1. Open [`notebooks/blender_render.ipynb`](notebooks/blender_render.ipynb) in Google Colab.
+2. Run the cells in order.
+3. Choose the Google Drive access mode and configure the scene source, frame range, output path, output mode, and render device.
+4. Install the notebook dependencies and wait for scene acquisition and Blender provisioning to finish.
+5. Run the render cell and monitor progress and output synchronization.
 
-Abre `notebooks/blender_render.ipynb` en [Google Colab](https://colab.research.google.com/)
-y selecciona un runtime con GPU (T4).
+## Google Drive access modes
 
-### 2. Ejecutar las celdas en orden
+- **Mounted Drive** uses Colab's interactive Drive mount and filesystem paths.
+- **Service account** uses the Google Drive API and Colab secrets. Configure `GDRIVE_SERVICE_ACCOUNT_JSON` and `GDRIVE_FOLDER_ID` before selecting this mode. Drive filesystem paths and the mounted-drive Blender cache are not available in this mode.
 
-1. **Montar Google Drive**: la primera celda te pedira autorizacion OAuth.
-2. **Configurar parametros**: pega el enlace de tu `.blend`, el rango de frames,
-   la ruta de destino en Drive, el modo de salida (compositor o sequencer) y
-   el dispositivo (CPU/CUDA/OptiX).
-3. **Instalar dependencias**: se instalan `requests`, `gdown` e `ipywidgets`.
-4. **Preparacion**: el notebook descarga el `.blend` y aprovisiona Blender.
-   El binario de Blender se cachea en Drive para sesiones futuras.
-5. **Render**: el monitor muestra en vivo el progreso, tiempo por frame,
-   promedio, tiempo restante y hora estimada de finalizacion.
+Never commit access tokens, service-account JSON, or other credentials to the repository. Prefer Colab Secrets for credentials. The notebook should not print secrets in command output.
 
-### 3. Reanudacion
+## Output and resuming
 
-Si la sesion de Colab se interrumpe (limite de 5h), vuelve a ejecutar el notebook
-con la misma configuracion. La reanudacion es automatica: detecta el ultimo frame
-completado y continua desde ahi.
+- **Drive output** is intended for incremental upload and resumable rendering.
+- **ZIP download** packages local output at the end and does not provide the same cross-session resume guarantee.
+- Resume reconciliation should treat actual rendered image files as evidence of completed frames, while respecting the requested frame range and any gaps in the sequence.
+- Compositor File Output nodes may write into separate subdirectories. Verify the resulting paths and frame numbering for your scene.
 
-## Ajustes de render
+The project cannot guarantee that every arbitrary compositor graph, third-party add-on, or external media dependency will work without scene-specific testing.
 
-Todos los ajustes de la escena (samples, resolucion, motor, formato de imagen)
-se configuran **en el archivo `.blend`**, no en el notebook. El notebook solo
-expone:
+## Video textures and FFmpeg
 
-| Ajuste | Donde se configura |
-|---|---|
-| Samples, resolucion, motor, formato | En el `.blend` desde Blender en tu PC |
-| Compositor vs. secuenciador | En el notebook (afecta el ensamblado de salida) |
-| GPU/CPU/OptiX | En el notebook (son preferencias de la maquina, no de la escena) |
-| Rango de frames | En el notebook |
-| Scripts personalizados | En el notebook (opcional) |
+Blender must be built with the required media support, and the source video must be accessible from the scene's runtime environment. A diagnostic message that detects movie resources is not proof that a particular MP4 decodes correctly. Validate video textures with a small render using the actual scene and Blender build.
 
-## Estructura del proyecto
+## Development and tests
 
-```
-src/bcr/              Paquete Python con la logica de orquestacion
-  config.py           Constantes y validacion
-  link_resolver.py    Resolucion de enlaces por proveedor
-  blender_provisioning.py  Descarga y cache de Blender
-  device_config.py    Configuracion GPU/CPU/OptiX (para ejecutar dentro de Blender)
-  state_manager.py    Archivo de estado para reanudacion
-  render_orchestrator.py  Lanzamiento de Blender, monitoreo y subida paralela
-  drive_sync.py       Copia de frames a Drive
-  progress_ui.py      Widgets de progreso con ipywidgets
-  custom_script_loader.py  Carga de scripts .py personalizados
-blender_scripts/      Scripts que se ejecutan dentro de Blender
-  render_frame_driver.py  Configura dispositivo y modo de salida
-notebooks/            Notebook de Colab (punto de entrada)
-  blender_render.ipynb
-tests/                Pruebas automatizadas (pytest, sin GPU)
-docs/                 Documentacion
-```
-
-## Desarrollo
+The project targets Python 3.10 or later for its orchestration code. Install development dependencies and run:
 
 ```bash
-# Entorno virtual
-python3 -m venv venv
-source venv/bin/activate
-
-# Dependencias de desarrollo
-pip install pytest pytest-mock requests gdown
-
-# Ejecutar pruebas
+python -m pip install -e ".[dev]"
 PYTHONPATH=src python -m pytest tests/ -v
 ```
 
-## Arquitectura
+Most automated tests mock Blender and Google Drive; passing them does not replace a live Colab render test.
 
-Ver `docs/ARCHITECTURE.md` para una descripcion detallada de los modulos,
-el flujo de datos y las decisiones de diseno.
-
-## Licencia
-
-MIT
+See [Architecture](docs/ARCHITECTURE.md), [Testing](docs/TESTING.md), and [Plan](docs/PLAN.md) for implementation details and known validation requirements.
