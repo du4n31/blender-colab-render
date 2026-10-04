@@ -117,3 +117,21 @@ class TestNotebookSource:
         code = self._notebook_code()
         assert "Blender termino con codigo" not in code
         assert "Error al clonar el repositorio" not in code
+
+    def test_notebook_code_cells_are_valid_python(self):
+        """Parse notebook code cells after excluding Colab shell and magic lines."""
+        import ast
+        import json
+        from pathlib import Path
+
+        notebook_path = Path(__file__).resolve().parents[1] / "notebooks" / "blender_render.ipynb"
+        notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+        for index, cell in enumerate(notebook.get("cells", [])):
+            if cell.get("cell_type") != "code":
+                continue
+            source = "".join(cell.get("source", []))
+            python_lines = [
+                line for line in source.splitlines()
+                if not line.lstrip().startswith(("!", "%"))
+            ]
+            ast.parse("\\n".join(python_lines), filename=f"notebook-cell-{index}")
