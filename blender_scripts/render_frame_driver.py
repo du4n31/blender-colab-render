@@ -148,7 +148,7 @@ def _configure_device(backend: str) -> None:
     if use_cpu:
         scene.cycles.device = "CPU"
         cprefs.compute_device_type = "NONE"
-        print("[driver] Dispositivo: CPU")
+        print("[driver] Device: CPU")
         return
 
     # Extraer backend limpio (ej: "OPTIX+CPU" -> "OPTIX")
@@ -167,12 +167,12 @@ def _configure_device(backend: str) -> None:
 
     if has_gpu:
         scene.cycles.device = "GPU"
-        print(f"[driver] Dispositivo: GPU ({clean_backend})")
+        print(f"[driver] Device: GPU ({clean_backend})")
     else:
         scene.cycles.device = "CPU"
         cprefs.compute_device_type = "NONE"
         print(
-            f"[driver] ADVERTENCIA: no se detecto GPU ({clean_backend}), "
+            f"[driver] WARNING: no GPU detected ({clean_backend}), "
             "se continua en CPU"
         )
 
@@ -231,7 +231,7 @@ def _remap_file_output_nodes(
 
     # En modo sequencer no hay nodos de compositor que remapear
     if output_mode == "sequencer":
-        print("[driver] Modo sequencer: no se remapean File Output nodes")
+        print("[driver] Sequencer mode: File Output nodes are not remapped")
         return
 
     # Guardar la ruta original (la que puso --render-output) por si
@@ -248,7 +248,7 @@ def _remap_file_output_nodes(
 
     if node_tree is None:
         print(
-            "[driver] No hay node_tree de compositor disponible, "
+            "[driver] No compositor node tree is available; "
             "no se remapean File Outputs"
         )
         scene.render.filepath = original_filepath
@@ -256,7 +256,7 @@ def _remap_file_output_nodes(
 
     # Asegurar que el node tree tiene nodos (puede estar vacio)
     if not node_tree.nodes:
-        print(f"[driver] Node tree vacio, no se remapean File Outputs")
+        print(f"[driver] Empty node tree; File Output nodes will not be remapped")
         scene.render.filepath = original_filepath
         return
 
@@ -317,9 +317,9 @@ def _remap_file_output_nodes(
         # Restaurar la salida directa del render como fallback
         scene.render.filepath = original_filepath
         print(
-            "[driver] ERROR: No se encontraron nodos File Output en el compositor. "
-            "Verifique que el .blend tenga nodos File Output en el compositor "
-            "y que sean accesibles via scene.compositing_node_group.",
+            "[driver] ERROR: No File Output nodes were found in the compositor. "
+            "Ensure the .blend contains compositor File Output nodes "
+            "accessible through scene.compositing_node_group.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -330,7 +330,7 @@ def _remap_file_output_nodes(
         )
         if warn_no_slots:
             print(
-                f"[driver] ADVERTENCIA: {warn_no_slots} nodo(s) "
+                f"[driver] WARNING: {warn_no_slots} nodo(s) "
                 "no tienen file_output_items"
             )
 
