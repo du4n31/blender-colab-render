@@ -1,4 +1,4 @@
-"""Configuracion del dispositivo de render (GPU/CPU/OptiX) dentro de Blender.
+"""Configuration del dispositivo de render (GPU/CPU/OptiX) dentro de Blender.
 
 Este script esta disenado para ejecutarse DENTRO del Python embebido de Blender
 via blender --python device_config.py. Usa solo bpy + stdlib.
@@ -43,7 +43,7 @@ def configure_device(backend: str) -> None:
     clean_backend = backend.upper().replace("+CPU", "")
     cprefs.compute_device_type = clean_backend
 
-    # Obligatorio en background mode: get_devices() puebla la lista
+    # Required in background mode: get_devices() puebla la lista
     cprefs.get_devices()
 
     _enable_gpu_devices(cprefs, clean_backend)
