@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from bcr.config import STATE_DIR_NAME, STATE_FILE_NAME
+from bcr.config import STATE_DIR_NAME, STATE_FILE_NAME, extract_frame_number
 
 
 class RenderState:
@@ -125,55 +125,36 @@ def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
 
 
 def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None) -> int:
-    """Reconcilia el ultimo frame contra los archivos realmente presentes en Drive.
-
-    Usa el valor mas conservador (menor) entre el estado y los archivos
-    fisicos, por si el archivo de estado quedo desactualizado por una
-    caida a mitad de escritura.
-
-    Args:
-        drive_path: Ruta de salida en Drive (o folder_id si se pasa
-            backend).
-        state_last_frame: Ultimo frame segun el archivo de estado.
-        backend: Backend opcional para listar frames via API. Por
-            defecto None -- comportamiento identico al actual.
-
-    Returns:
-        El ultimo frame confirmado (0 si no hay frames).
-    """
+    """Return the last contiguous frame confirmed by both state and stored files."""
     if backend is not None:
         frames_on_disk = backend.list_frame_numbers(drive_path)
     else:
         frames_on_disk = _list_frame_numbers(drive_path)
 
-    if not frames_on_disk:
+    ordered = sorted(set(frames_on_disk))
+    if not ordered:
         return 0
 
-    max_on_disk = max(frames_on_disk)
-    return min(state_last_frame, max_on_disk)
-
+    # Never skip a missing frame after a partially completed parallel upload.
+    contiguous_last = ordered[0] - 1
+    for frame_number in ordered:
+        if frame_number != contiguous_last + 1:
+            break
+        contiguous_last = frame_number
+    return min(max(0, state_last_frame), contiguous_last)
 
 def _list_frame_numbers(drive_path: Path) -> list[int]:
-    """Lista los numeros de frame de archivos frame_NNNNNN.* en drive_path.
-
-    Busca recursivamente en subdirectorios (para frames organizados
-    por nodo File Output). Soporta .png y .exr.
-    """
+    """Find frame numbers in rendered images, including compositor subfolders."""
     if not drive_path.exists():
         return []
 
-    frames: list[int] = []
+    image_extensions = {".png", ".exr", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
+    frames: set[int] = set()
     for root, _dirs, files in os.walk(str(drive_path)):
         for entry in files:
-            if entry.startswith("frame_") and (
-                entry.endswith(".png") or entry.endswith(".exr")
-            ):
-                base = entry.replace(".png", "").replace(".exr", "")
-                parts = base.split("_")
-                if len(parts) >= 2:
-                    num_part = parts[-1]
-                    try:
-                        frames.append(int(num_part))
-                    except ValueError:
-                        continue
+            if Path(entry).suffix.lower() not in image_extensions:
+                continue
+            frame_number = extract_frame_number(entry)
+            if frame_number is not None:
+                frames.add(frame_number)
     return sorted(frames)
