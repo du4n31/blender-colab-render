@@ -143,7 +143,8 @@ def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None, 
         if frame_number != contiguous_last + 1:
             break
         contiguous_last = frame_number
-    return min(max(0, state_last_frame), contiguous_last)
+    # Actual image files are authoritative; a missing or stale checkpoint must not disable resume.
+    return max(0, contiguous_last)
 
 def _list_frame_numbers(drive_path: Path) -> list[int]:
     """Find frame numbers in rendered images, including compositor subfolders."""
