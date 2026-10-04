@@ -1,6 +1,6 @@
 """Synchronize rendered frames with Google Drive.
 
-Drive se monta como sistema de archivos via google.colab.drive.mount(),
+Drive is mounted as a filesystem through google.colab.drive.mount(),
 so uploading is implemented as a file copy using shutil.
 """
 
