@@ -211,7 +211,7 @@ class TestResolveZipContents(unittest.TestCase):
         with self.assertRaises(SourceAcquisitionError) as ctx:
             resolve_zip_contents(zip_path, self._tmpdir, "blend")
         msg = str(ctx.exception)
-        self.assertIn("archivos .blend", msg)
+        self.assertIn(".blend files", msg)
         self.assertIn("model1.blend", msg)
         self.assertIn("model2.blend", msg)
 
@@ -265,7 +265,7 @@ class TestResolveZipContents(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             resolve_zip_contents(zip_path, self._tmpdir, "script")
-        self.assertIn("archivos .py", str(ctx.exception))
+        self.assertIn(".py files", str(ctx.exception))
 
     def test_zip_slip_rejected_before_extraction(self) -> None:
         """Entrada ZIP con ../ que intenta zip slip es rechazada."""
@@ -275,7 +275,7 @@ class TestResolveZipContents(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             resolve_zip_contents(zip_path, self._tmpdir, "blend")
-        self.assertIn("Zip slip", str(ctx.exception))
+        self.assertIn("ZIP slip", str(ctx.exception))
 
         # Verificar que no hubo extraccion fuera del directorio
         extract_dir = self._tmpdir / "slip"
