@@ -58,6 +58,24 @@ def _find_violations(name: str, pattern: str) -> list[str]:
 class TestDriverApiCompat(unittest.TestCase):
     """Detecta APIs deprecadas en el driver de render."""
 
+    def test_sanitized_compositor_folder_names_do_not_collide(self) -> None:
+        """Different node names that sanitize identically receive distinct folders."""
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("render_frame_driver", DRIVER_PATH)
+        assert spec is not None and spec.loader is not None
+        driver = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(driver)
+
+        used: set[str] = set()
+        first = driver._unique_safe_node_name("Beauty Pass", used)
+        second = driver._unique_safe_node_name("Beauty-Pass", used)
+        third = driver._unique_safe_node_name("Beauty Pass", used)
+
+        self.assertEqual(first, "Beauty_Pass")
+        self.assertEqual(second, "Beauty_Pass_2")
+        self.assertEqual(third, "Beauty_Pass_3")
+
     def test_driver_source_exists(self) -> None:
         """El archivo del driver debe existir."""
         self.assertTrue(DRIVER_PATH.exists(), f"Driver no encontrado: {DRIVER_PATH}")
