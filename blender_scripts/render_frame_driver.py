@@ -214,7 +214,7 @@ def _remap_file_output_nodes(
     valida en Linux.
 
     It also disables direct render output (scene.render.filepath)
-    para que solo los File Output nodes generen archivos.
+    so only File Output nodes generate files.
 
     Para nodos EXR Multilayer, preserva los nombres de item (que son nombres
     de capa dentro del .exr). Para nodos single-layer, agrega marcador de
@@ -222,28 +222,28 @@ def _remap_file_output_nodes(
 
     Args:
         output_dir: Clean base directory (without Blender's # pattern) for
-            los archivos de salida de File Output nodes.
+            output files from File Output nodes.
         output_mode: Output mode ('compositor' or 'sequencer').
     """
     import bpy
 
     scene = bpy.context.scene
 
-    # En modo sequencer no hay nodos de compositor que remapear
+    # In sequencer mode, there are no compositor nodes to remap
     if output_mode == "sequencer":
         print("[driver] Sequencer mode: File Output nodes are not remapped")
         return
 
     # Save the original path (provided by --render-output) in case
-    # no hay File Output nodes y tenemos que usarla como fallback.
+    # there are no File Output nodes, so use it as a fallback.
     original_filepath = scene.render.filepath
 
     # Redirect direct render output to a disposable directory
-    # para que no genere un archivo extra ademas de los File Output nodes.
+    # to avoid generating an extra file in addition to File Output node output.
     scene.render.filepath = f"{output_dir}/_render_result_"
 
     # En Blender 5.0+, el arbol de nodos del compositor se accede mediante
-    # scene.compositing_node_group. scene.node_tree ya no existe como atributo.
+    # scene.compositing_node_group. scene.node_tree is no longer an attribute.
     node_tree = scene.compositing_node_group
 
     if node_tree is None:
@@ -292,7 +292,7 @@ def _remap_file_output_nodes(
                 f"({len(node.file_output_items)} capas preservadas)"
             )
         else:
-            # En nodos single-layer, cada item es un archivo separado.
+            # In single-layer nodes, each item is a separate file.
             # file_name must remain empty to avoid duplicating the frame marker.
             node.file_name = ""
             for item in node.file_output_items:
