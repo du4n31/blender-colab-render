@@ -1,7 +1,7 @@
 """Generalize file acquisition for Blender Colab Render.
 
 Replaces link_resolver.py as the external acquisition layer.
-link_resolver.py se mantiene como detalle interno de la implementacion.
+link_resolver.py remains an internal implementation detail.
 """
 
 import shutil
