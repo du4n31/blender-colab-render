@@ -150,6 +150,14 @@ class TestListFramesInDrive(unittest.TestCase):
         (self._drive / "output.exr").touch()
         self.assertEqual(list_frames_in_drive(self._drive), [1])
 
+    def test_ignores_non_image_assets_with_six_digit_names(self) -> None:
+        """Scene files, scripts, and videos must not be mistaken for rendered frames."""
+        (self._drive / "frame_000001.png").touch()
+        (self._drive / "scene_000002.blend").touch()
+        (self._drive / "script_000003.py").touch()
+        (self._drive / "texture_000004.mp4").touch()
+        self.assertEqual(list_frames_in_drive(self._drive), [1])
+
     def test_mixed_subdirectories(self) -> None:
         """Frames en multiples subdirectorios."""
         (self._drive / "frame_000001.png").touch()
