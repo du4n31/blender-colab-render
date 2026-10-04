@@ -139,6 +139,10 @@ class TestNotebookSource:
     def test_render_output_is_separate_from_temporary_assets(self):
         """Rendered images and ZIP exports must not include scene/script inputs."""
         code = self._notebook_code()
-        assert "RENDER_OUTPUT_DIR = Path(\"/content/render_output\")" in code
+        from pathlib import Path
+
+        config_path = Path(__file__).resolve().parents[1] / "src" / "bcr" / "config.py"
+        config = config_path.read_text(encoding="utf-8")
+        assert 'RENDER_OUTPUT_DIR = Path("/content/render_output")' in config
         assert "output_dir=RENDER_OUTPUT_DIR" in code
         assert "RENDER_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)" in code
