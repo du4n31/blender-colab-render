@@ -22,7 +22,7 @@ class RenderProgressUI:
         self._label_warning = None
 
     def create_widgets(self) -> None:
-        """Crea los widgets ipywidgets (llamar una vez al inicio)."""
+        """Create the ipywidgets controls (call once at startup)."""
         try:
             import ipywidgets as widgets  # type: ignore[import-untyped]
             from IPython.display import display
