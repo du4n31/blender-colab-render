@@ -168,7 +168,8 @@ class RenderOrchestrator:
                 self.drive_output_dir, total_frames, backend=self.drive_backend
             )
             confirmed_frame = reconcile_with_files(
-                self.drive_output_dir, saved_frame, backend=self.drive_backend
+                self.drive_output_dir, saved_frame, backend=self.drive_backend,
+                frame_start=self.frame_start
             )
             if confirmed_frame >= self.frame_start:
                 if confirmed_frame >= self.frame_end:
