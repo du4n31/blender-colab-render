@@ -1,71 +1,49 @@
-# Estrategia de pruebas
+# Testing strategy
 
-## Automatizado (pytest)
+## Automated tests
 
-Se ejecuta con `pytest` sin necesidad de Blender ni GPU. Corre en cualquier
-maquina con Python 3.10+.
+The unit test suite is intended to run without Blender or a GPU, using Python 3.10 or later.
 
-### Que se prueba
-
-| Modulo | Archivo | Que cubre |
-|---|---|---|
-| config | test_notebook_smoke.py | Validacion de frame range, URL, ruta Drive |
-| link_resolver | test_link_resolver.py | Resolucion por proveedor, Dropbox, GDrive, MediaFire, errores HTTP |
-| state_manager | test_state_manager.py | CRUD de estado, reconciliacion contra archivos, corrupcion |
-| progress_ui | test_progress_ui.py | Creacion segura sin ipywidgets, format_timedelta |
-| render_orchestrator | test_render_orchestrator.py | Construccion y orden de args, parseo de stdout, deteccion de Saved: |
-| drive_backend | test_drive_backend.py | Backend de Drive via API (service account): carpetas, subida de frames, listado recursivo, estado, lectura de secretos |
-
-### Como ejecutar
+Run the suite from the repository root:
 
 ```bash
-# Usando uv (recomendado en desarrollo)
-uv run --with pytest,pytest-mock,requests,gdown,google-api-python-client,google-auth python -m pytest tests/ -v
-
-# O con pip en un venv
-python3 -m venv venv
-source venv/bin/activate
-pip install pytest pytest-mock requests gdown
+python -m pip install -e ".[dev]"
 PYTHONPATH=src python -m pytest tests/ -v
 ```
 
-### Estrategia de mocking
+If using a virtual environment directly, install at least `pytest`, `pytest-mock`, and `requests`. Tests for the service-account backend also require the Google API and authentication packages declared in the development dependencies.
 
-- Las llamadas HTTP se mockean con `unittest.mock.patch`
-- El subproceso de Blender no se ejecuta (solo se prueba la construccion de args)
-- `bpy` no esta disponible en testing (los modulos que lo usan lo importan dentro
-  de las funciones, no al nivel del modulo)
+## Coverage areas
 
-## Manual (sin automatizar)
+| Area | Test module | Expected coverage |
+|---|---|---|
+| Configuration | `test_config.py`, `test_notebook_smoke.py` | Frame-range validation, URL and Drive-path validation, notebook structure |
+| Source acquisition | `test_source_resolver.py`, `test_link_resolver.py` | Provider URL handling, archive extraction, HTTP failures |
+| Blender provisioning | `test_blender_provisioning.py` | Version discovery, download paths, extraction and error handling |
+| Device setup | `test_driver_api_compat.py` | Compatibility checks for Blender-side device configuration |
+| State management | `test_state_manager.py` | Checkpoint persistence, corrupted state, actual-file reconciliation, gaps and non-default frame starts |
+| Orchestration | `test_render_orchestrator.py` | Blender command construction, stdout parsing, progress metrics, upload coordination, resume behavior |
+| Drive storage | `test_drive_backend.py`, `test_drive_sync.py` | Mocked folder creation, frame upload/listing, state persistence and synchronization |
+| Export | `test_local_export.py` | Disk-space checks, packaging, download behavior |
+| Progress UI | `test_progress_ui.py` | UI behavior and operation when optional widgets are unavailable |
 
-Estas pruebas requieren una GPU T4 real en Colab y no se pueden automatizar
-en una maquina de desarrollo normal.
+## Test design
 
-### Checklist manual
+- Mock network requests and external API calls.
+- Avoid requiring a real Blender process for unit tests; test command construction separately.
+- Include resume cases for stale checkpoints, files ahead of the checkpoint, missing intermediate frames, non-default frame starts, and already-complete ranges.
+- Verify that progress totals are calculated against the original requested range.
+- Test compositor outputs in nested directories and ensure unrelated files are ignored.
 
-- [ ] **Deteccion de GPU**: Ejecutar el notebook con DEVICE=OPTIX en una
-      instancia T4 de Colab. Verificar que el log muestra "GPU (OPTIX)".
-- [ ] **Deteccion de GPU faltante**: Ejecutar en CPU runtime. Verificar que
-      muestra la advertencia de fallback a CPU.
-- [ ] **Render de un frame**: Renderizar 1 frame. Confirmar que aparece en Drive.
-- [ ] **Render de animacion**: Renderizar 10 frames. Confirmar que todos aparecen
-      en Drive, numerados secuencialmente.
-- [ ] **Subida incremental**: Durante un render de varios frames, verificar que
-      los frames aparecen en Drive antes de que termine el render completo.
-- [ ] **Reanudacion**: Interrumpir un render a mitad de camino. Volver a ejecutar
-      el notebook. Verificar que continua desde el frame siguiente al ultimo
-      completado.
-- [ ] **Toggle compositor/sequencer**: Renderizar con OUTPUT_MODE=compositor y
-      OUTPUT_MODE=sequencer. Verificar diferencia en el output.
-- [ ] **Toggle CPU/CUDA/OptiX**: Verificar que cada opcion produce un render
-      valido (aunque CPU sea mucho mas lento).
-- [ ] **Script personalizado**: Subir un script .py que modifique un ajuste de
-      render y verificar que se aplique.
-- [ ] **MediaFire**: Probar con un enlace real de MediaFire.
-- [ ] **Dropbox**: Probar con un enlace real de Dropbox.
-- [ ] **Google Drive**: Probar con un enlace real de Google Drive.
-- [ ] **Enlace directo**: Probar con una URL que termine en .blend.
-- [ ] **Ruta de Drive personalizada**: Verificar que los frames se guardan en
-      la ruta exacta configurada.
-- [ ] **Sesion completa**: Una corrida completa de principio a fin en una sesion
-      nueva de Colab sin editar codigo en las celdas.
+## Required integration checks
+
+A passing unit suite is not sufficient for release. Before merging changes that affect rendering, run a small job in Google Colab and record the Blender version, runtime type, output destination, and results.
+
+1. Render a short image sequence to mounted Drive.
+2. Interrupt after at least one frame, restart the render cell, and verify that the first missing frame is rendered without skipping gaps.
+3. Repeat the resume check with a requested frame range that does not start at frame 1.
+4. Exercise compositor File Output nodes whose original paths contain Windows-style prefixes.
+5. Render a scene with an MP4 video texture and confirm that the resulting image visibly contains the expected video frame.
+6. Verify that service-account mode and ZIP-download mode either work as documented or fail with an explicit, actionable message.
+
+Do not describe FFmpeg or MP4 support as validated until a real video-texture render succeeds in the target Blender build.
