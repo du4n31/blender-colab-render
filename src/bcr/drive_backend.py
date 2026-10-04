@@ -184,7 +184,7 @@ class ServiceAccountDriveBackend:
         try:
             created = self._service.files().create(body=metadata, fields="id").execute()
         except Exception as exc:
-            msg = f"Failed to create folder '{name}' en Drive: {exc}"
+            msg = f"Failed to create folder '{name}' in Drive: {exc}"
             raise DriveBackendError(msg) from exc
         return created["id"]
 
@@ -202,7 +202,7 @@ class ServiceAccountDriveBackend:
                 .execute()
             )
         except Exception as exc:
-            msg = f"Failed to find '{name}' en Drive: {exc}"
+            msg = f"Failed to find '{name}' in Drive: {exc}"
             raise DriveBackendError(msg) from exc
         files = resp.get("files", [])
         return files[0] if files else None
@@ -275,7 +275,7 @@ class ServiceAccountDriveBackend:
         except DriveBackendError:
             raise
         except Exception as exc:
-            msg = f"Failed to upload '{dest_filename}' a Drive: {exc}"
+            msg = f"Failed to upload '{dest_filename}' to Drive: {exc}"
             raise DriveBackendError(msg) from exc
 
         return result
