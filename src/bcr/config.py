@@ -37,6 +37,7 @@ BLENDER_BINARY_RELATIVE = Path(f"blender-{BLENDER_VERSION}-linux-x64/blender")
 # --- Directories ---
 DRIVE_MOUNT_POINT = Path("/content/drive")
 RENDER_TMP_DIR = Path("/content/render_tmp")
+RENDER_OUTPUT_DIR = Path("/content/render_output")
 PROJECT_DIR_IN_DRIVE = Path("MyDrive/BlenderColabRender")
 STATE_DIR_NAME = "_estado"
 STATE_FILE_NAME = "render_state.json"
