@@ -135,3 +135,10 @@ class TestNotebookSource:
                 if not line.lstrip().startswith(("!", "%"))
             ]
             ast.parse("\\n".join(python_lines), filename=f"notebook-cell-{index}")
+
+    def test_render_output_is_separate_from_temporary_assets(self):
+        """Rendered images and ZIP exports must not include scene/script inputs."""
+        code = self._notebook_code()
+        assert "RENDER_OUTPUT_DIR = Path(\"/content/render_output\")" in code
+        assert "output_dir=RENDER_OUTPUT_DIR" in code
+        assert "RENDER_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)" in code
