@@ -115,6 +115,14 @@ class TestReconcileWithFiles:
         )
         assert result == 0
 
+    def test_non_image_assets_with_frame_numbers_are_ignored(self, tmp_drive_dir: Path):
+        """Scene files and scripts with six-digit names are not rendered frames."""
+        (tmp_drive_dir / "scene_000001.blend").touch()
+        (tmp_drive_dir / "script_000002.py").touch()
+        (tmp_drive_dir / "frame_000003.png").touch()
+        result = reconcile_with_files(tmp_drive_dir, state_last_frame=3)
+        assert result == 0
+
     def test_state_ahead_of_files(self, tmp_drive_dir: Path):
         """If the checkpoint says frame 10 but files only reach frame 5, use 5."""
         for i in range(1, 6):
