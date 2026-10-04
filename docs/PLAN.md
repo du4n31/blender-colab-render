@@ -1,80 +1,60 @@
-# Blender Colab Render — Plan
+# Blender Colab Render — Project plan
 
-## Necesidades
+## Goal
 
-Renderizar escenas de Blender usando las GPUs T4 gratuitas de Google Colab, en sesiones continuas de ~5 horas, con subida incremental de frames a Drive para no perder progreso si la sesión se interrumpe.
+Render Blender scenes in Google Colab sessions while preserving completed work across interruptions. The primary workflow uploads individual frames to Google Drive as rendering progresses, allowing a later session to continue from confirmed output.
 
-## Áreas críticas / Riesgos
+## Critical risks
 
-| Riesgo | Impacto | Mitigación |
+| Risk | Impact | Mitigation |
 |---|---|---|
-| Sesión de Colab interrumpida a mitad de animación larga | Pérdida de progreso | Subida incremental de frames + archivo de estado en Drive |
-| Blender no encuentra GPU en background mode | Render en CPU (lentísimo) | Script de detección con fallback explícito + advertencia |
-| Orden incorrecto de args de línea de comandos | Render no usa la salida/config deseada | Validación exhaustiva en tests del orden exacto |
-| Drive montado vs. no montado | Frames no se suben | Validación al inicio + reconciliación al final |
-| Enlace de MediaFire sin resolver | .blend no se descarga | Resolución HTML de la página de descarga |
-| Python embebido de Blender sin acceso a pip | Scripts de render no pueden usar librerías externas | Separación clara: orquestación en kernel, render con solo stdlib+bpy |
+| Colab session ends during a long animation | Lost work or incorrect resume position | Incremental frame uploads, persistent checkpoints, and reconciliation against actual files |
+| Blender does not enable the requested GPU in background mode | Render silently falls back to CPU or fails | Explicit device configuration, runtime diagnostics, and actionable warnings |
+| Blender command-line arguments are ordered or composed incorrectly | Wrong range, output, or render mode | Tests for exact command construction and argument order |
+| Drive is mounted or configured incorrectly | Frames or state are not persisted | Validate storage mode before rendering and reconcile output at completion |
+| A source URL cannot be resolved | Scene or script download fails | Provider-specific resolvers, timeouts, and clear error messages |
+| Blender's embedded Python lacks orchestration dependencies | Blender-side scripts fail at runtime | Keep Blender-side code limited to `bpy` and the standard library |
+| Video textures are missing or unsupported by the selected build | Incorrect output or render failure | Audit media paths and FFmpeg build options, then validate with a real MP4 integration render |
+| Compositor nodes use host-specific paths | Output files are written to unexpected locations | Deterministic, sanitized output mapping and path-focused tests |
 
-## Factibilidad
+## Architecture constraints
 
-- **Técnicamente viable**: la referencia `ynshung/blender-colab` ya demuestra el concepto base.
-- **Mejoras respecto a la referencia**: subida paralela por frame (no zip al final), reanudación, scripts personalizados, tests, UI con ipywidgets.
-- **Limitación conocida**: una sola GPU T4, sin paralelismo de render. La paralelización es solo en subida vs. render.
-- **Riesgo asumible**: las ~5h de sesión Colab son suficientes para animaciones cortas (~50-250 frames a 30s/frame). Para trabajos más largos, la reanudación permite continuar en múltiples sesiones.
+- The Colab kernel owns user interaction, source acquisition, storage APIs, monitoring, and subprocess management.
+- Blender's embedded Python owns scene configuration and rendering; it must not depend on packages installed only in the notebook kernel.
+- Mounted Drive and service-account Drive are distinct storage modes with different path semantics.
+- The notebook should be a thin user interface over the reusable modules in `src/bcr/`.
+- Checkpoint state must not be treated as stronger evidence than the actual rendered files.
 
-## Oportunidades de optimización
+## Delivery phases
 
-1. **Caché de Blender en Drive**: descargar el `.tar.xz` una vez, reusar en sesiones futuras.
-2. **Descarga del .blend y aprovisionamiento de Blender en paralelo** al inicio.
-3. **Subida de cada frame mientras se renderiza el siguiente** (superposición I/O - cómputo).
-4. **Límite de backlog local**: si Drive va más lento que el render, el backlog no crece sin control.
+### Phase 1 — Correctness and regression protection
 
-## Flujo de trabajo del proyecto
+- Centralize resume logic in the orchestrator to avoid applying resume offsets twice.
+- Reconcile the saved checkpoint with a contiguous sequence of actual frame files.
+- Cover gaps, stale checkpoints, non-default frame ranges, compositor subdirectories, and already-complete jobs.
+- Ensure progress metrics remain relative to the originally requested frame range.
 
-```
-Fase 0 ─→ docs/PLAN.md
-Fase 1 ─→ Repositorio git + GitHub (+ .gitignore, LICENSE, README.md inicial)
-Fase 2 ─→ Desglose en tickets (to-tickets + task-management)
-Fase 3 ─→ Implementación ticket por ticket (implement + tdd + code-review)
-Fase 4 ─→ Ensamblado del notebook
-Fase 5 ─→ Cierre: tests, docs, checklist, push final
-```
+### Phase 2 — English-language consistency
 
-Cada fase produce al menos un commit. Un commit por ticket cerrado.
+- Translate notebook headings, form descriptions, prompts, logs, comments, docstrings, and user-facing exceptions to English.
+- Translate README and developer documentation.
+- Preserve identifiers and public configuration names unless a rename is necessary and tested.
+- Ensure tests and sample output use the same language.
 
-## Flujo de trabajo del render (runtime)
+### Phase 3 — Media and output reliability
 
-```
-1. Usuario pega enlace del .blend + config en el notebook
-2. Resolver enlace ─→ obtener URL real de descarga
-3. En paralelo: descargar .blend + aprovisionar Blender (desde Drive cache o download)
-4. Montar Google Drive (si no está montado)
-5. Validar configuración (ruta Drive, rango frames, etc.)
-6. Lanzar Blender (proceso no bloqueante)
-7. Leer stdout línea por línea, detectando "Saved: '<ruta>'"
-8. Por cada frame detectado: copiar a Drive + borrar local (en ThreadPoolExecutor)
-9. Actualizar archivo de estado en Drive
-10. Actualizar UI de progreso en vivo (ipywidgets)
-11. Al terminar/caer: reconciliación (subir frames pendientes)
-```
+- Review compositor output-node mapping and ensure destinations are deterministic.
+- Improve diagnostics for missing movie resources and FFmpeg capability.
+- Validate MP4 video textures using a real scene and the target Blender build.
+- Verify mounted Drive, service-account Drive, and ZIP-download behavior independently.
 
-## Características (de §§3-4 de la especificación)
+### Phase 4 — Reproducibility and release readiness
 
-### Obligatorias
+- Run all automated tests in a clean Python environment.
+- Add or verify continuous integration for the unit suite.
+- Perform short Colab integration runs for rendering, interruption/resume, compositor output, and MP4 media.
+- Document the tested Blender versions and known limitations before merging.
 
-1. Subir .blend vía enlace (Directo, Dropbox, Google Drive, MediaFire)
-2. Renderizar animación completa (--frame-start / --frame-end / --render-anim)
-3. Renderizar 1 solo frame (--render-frame N)
-4. Monitor: tiempo/frame, estimado, promedio, % completación, ETA
-5. Google Drive: render → subir → borrar (shutil.copy + os.remove)
-6. Paralelizar subida+borrado con render del frame siguiente
-7. Elegir output: compositor o secuenciador
-8. Subir scripts Python personalizados para hooks de render
-9. Elegir ruta destino dentro de Drive
-10. Nombrar frames por número real de Blender con padding (frame_%06d.png)
+## Acceptance criteria
 
-### Deseables
-
-11. Archivo de estado para reanudación (en Drive)
-12. Activar/desactivar GPU o CPU
-13. Activar/desactivar OptiX (frente a CUDA)
+A release candidate is acceptable only when the automated suite passes, resume behavior is correct for gaps and non-default frame starts, outputs land in the expected destinations, user-facing notebook text is in English, and the required Colab integration checks are recorded. Do not claim a live render or MP4 validation unless it has actually been performed.
