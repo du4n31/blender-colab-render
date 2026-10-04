@@ -1,6 +1,6 @@
-"""Gestion del archivo de estado para reanudacion de renders interrumpidos.
+"""Management del state file para reanudacion de renders interrupted.
 
-El archivo de estado se guarda en Drive (no en disco local) para que sobreviva
+El state file se guarda en Drive (no en disco local) para que sobreviva
 entre sesiones de Colab.
 """
 
@@ -15,7 +15,7 @@ from bcr.config import STATE_DIR_NAME, STATE_FILE_NAME, extract_frame_number
 
 
 class RenderState:
-    """Estado serializable de un trabajo de render."""
+    """Serializable state for a render job."""
 
     def __init__(
         self,
@@ -48,7 +48,7 @@ class RenderState:
 
 
 def _state_path(drive_path: Path) -> Path:
-    """Ruta completa al archivo de estado dentro de Drive."""
+    """Ruta completa al state file dentro de Drive."""
     return drive_path / STATE_DIR_NAME / STATE_FILE_NAME
 
 
@@ -88,7 +88,7 @@ def save_state(
 
 
 def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
-    """Carga el ultimo frame confirmado desde el archivo de estado.
+    """Carga el ultimo frame confirmado desde el state file.
 
     Args:
         drive_path: Ruta base de salida en Drive (o folder_id si se pasa
