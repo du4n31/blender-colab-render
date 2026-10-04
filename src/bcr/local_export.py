@@ -16,7 +16,7 @@ def package_output(output_dir: Path, output_name: str = "render_output") -> Path
     """Empaqueta el directorio de salida completo en un archivo .zip.
 
     Args:
-        output_dir: Directorio con los frames renderizados (puede tener
+        output_dir: Directorio con los frames renderings (puede tener
             subdirectorios por nodo).
         output_name: Nombre base del .zip (default: "render_output").
 
@@ -73,7 +73,7 @@ def trigger_download(zip_path: Path) -> None:
 def check_disk_space(
     output_dir: Path, min_free_gb: float = 2.0
 ) -> tuple[bool, str]:
-    """Verifica si hay suficiente espacio libre en disco para renderizar.
+    """Verifica si hay suficiente espacio libre en disco para render.
 
     Args:
         output_dir: Directorio donde se escribiran los frames.
