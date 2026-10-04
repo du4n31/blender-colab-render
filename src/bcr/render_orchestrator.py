@@ -1,8 +1,8 @@
-"""Orquestador del proceso de render.
+"""Render process orchestrator.
 
-Lanza Blender como subproceso no bloqueante, lee su stdout en tiempo real,
-y para cada frame detectado lo sube a Drive en un hilo separado mientras
-Blender renderiza el siguiente.
+Launches Blender as a subprocess, reads stdout in real time,
+and uploads each detected frame to Drive on a separate thread while
+Blender renders the next frame.
 """
 
 import os
@@ -23,7 +23,7 @@ from bcr.state_manager import load_state, reconcile_with_files, save_state
 
 
 class RenderError(Exception):
-    """Error durante el proceso de render."""
+    """Error during the render process."""
 
 
 # Callback type for progress updates
@@ -151,7 +151,7 @@ class RenderOrchestrator:
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        """Ejecuta el proceso de render completo.
+        """Run the complete render process.
 
         Lanza Blender como subproceso, monitoriza stdout en tiempo real,
         y segun ``output_target`` sube frames a Drive incrementalmente
@@ -193,7 +193,7 @@ class RenderOrchestrator:
                 bufsize=1,
             )
         except OSError as exc:
-            msg = f"Error al lanzar Blender: {exc}"
+            msg = f"Failed to launch Blender: {exc}"
             raise RenderError(msg) from exc
 
         self._current_frame = 0
@@ -348,7 +348,7 @@ class RenderOrchestrator:
             return ""
 
     def _find_frame_file(self, frame_num: int) -> Optional[Path]:
-        """Busca el archivo de frame renderizado en el directorio temporal.
+        """Busca el archivo de frame rendering en el directorio temporal.
 
         Busca cualquier archivo cuyo nombre contenga exactamente 6 digitos
         que coincidan con frame_num.
@@ -393,7 +393,7 @@ class RenderOrchestrator:
         """Sube un frame a Drive y lo borra localmente.
 
         Args:
-            local_path: Ruta local al archivo renderizado.
+            local_path: Ruta local al archivo rendering.
             frame_num: Numero de frame.
             subdir: Subdirectorio en Drive para organizar multiples
                 salidas (ej: nombre del nodo File Output).
@@ -530,7 +530,7 @@ class RenderOrchestrator:
                     )
 
     def _cleanup_process(self) -> None:
-        """Limpia el proceso de Blender si sigue vivo."""
+        """Clean up the Blender process if it is still running."""
         if self._process and self._process.poll() is None:
             self._process.terminate()
             try:
@@ -540,7 +540,7 @@ class RenderOrchestrator:
                 self._process.wait()
 
     def get_exit_code(self) -> Optional[int]:
-        """Devuelve el codigo de salida del proceso de Blender, o None si sigue corriendo."""
+        """Return the Blender process exit code, or None if it is still running."""
         if self._process is None:
             return None
         return self._process.poll()
