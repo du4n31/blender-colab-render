@@ -52,13 +52,13 @@ def upload_frame(
     """Copy a rendered frame from the runtime to Drive.
 
     If preserve_name=True (default), preserve the original filename
-    para evitar colisiones cuando hay multiples salidas por frame.
+    to avoid collisions when there are multiple outputs per frame.
     If preserve_name=False, use the frame_%06d.ext pattern for compatibility.
 
     Args:
         local_path: Local path to the rendered frame.
         drive_output_dir: Drive output directory.
-        frame_num: Numero de frame (para naming fallback).
+        frame_num: Frame number (used for fallback naming).
         subdir: Subdirectorio opcional (ej: nombre del nodo).
         preserve_name: If True, preserve the original filename.
 
@@ -77,7 +77,7 @@ def upload_frame(
 
     # Determinar nombre de destino
     if preserve_name:
-        # Usar nombre original para evitar colisiones
+        # Preserve the original name to avoid collisions
         dest_filename = local_path.name
     else:
         # Fallback: frame_NNNNNN.ext pattern
@@ -120,11 +120,11 @@ def remove_local(local_path: Path) -> None:
 
 
 def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
-    """Lista los numeros de frame subidos a Drive.
+    """List frame numbers uploaded to Drive.
 
     Recursively search subdirectories for files whose names contain
     exactly six consecutive digits (the frame number). It does not assume
-    un prefijo especifico como "frame_".
+    a specific prefix such as "frame_".
 
     Args:
         drive_output_dir: Drive output directory.
