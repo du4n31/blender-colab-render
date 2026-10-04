@@ -63,7 +63,7 @@ def get_blender_path(
             _download_file(download_url, tar_path)
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(str(tar_path), str(cache_path))
-            print(f"[blender] Cacheado en: {cache_path}")
+            print(f"[blender] Cached at: {cache_path}")
     else:
         print(f"[blender] Downloading Blender from {download_url}")
         _download_file(download_url, tar_path)
@@ -74,7 +74,7 @@ def get_blender_path(
         shutil.rmtree(str(extract_dir))
     extract_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[blender] Extrayendo {tar_path.name}...")
+    print(f"[blender] Extracting {tar_path.name}...")
     with tarfile.open(str(tar_path), "r:xz") as tar:
         tar.extractall(path=str(extract_dir))
 
@@ -85,7 +85,7 @@ def get_blender_path(
         raise BlenderProvisioningError(msg)
 
     os.chmod(str(blender_bin), 0o755)
-    print(f"[blender] Binario listo: {blender_bin}")
+    print(f"[blender] Binary ready: {blender_bin}")
     return blender_bin
 
 
