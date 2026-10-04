@@ -134,7 +134,7 @@ class TestNotebookSource:
                 line for line in source.splitlines()
                 if not line.lstrip().startswith(("!", "%"))
             ]
-            ast.parse("\\n".join(python_lines), filename=f"notebook-cell-{index}")
+            ast.parse("\n".join(python_lines), filename=f"notebook-cell-{index}")
 
     def test_render_output_is_separate_from_temporary_assets(self):
         """Rendered images and ZIP exports must not include scene/script inputs."""
