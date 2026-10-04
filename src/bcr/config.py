@@ -44,6 +44,9 @@ STATE_FILE_NAME = "render_state.json"
 # Pattern for rendered frames (Blender replaces ##### with the frame number)
 RENDER_OUTPUT_PATTERN = "frame_######"
 
+# File types that represent rendered image frames (exclude scenes, scripts, and archives).
+RENDERED_IMAGE_EXTENSIONS = frozenset({".png", ".exr", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"})
+
 # --- Uploads ---
 BACKLOG_LIMIT = 5  # maximum local frames waiting for upload before pausing
 
