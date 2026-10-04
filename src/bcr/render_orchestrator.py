@@ -41,7 +41,7 @@ ProgressCallback = Callable[
 
 
 class RenderOrchestrator:
-    """Orquesta el proceso completo de render."""
+    """Orchestrate the complete render job."""
 
     def __init__(
         self,
@@ -147,7 +147,7 @@ class RenderOrchestrator:
         return cmd
 
     # ------------------------------------------------------------------
-    # Ejecucion
+    # Execution
     # ------------------------------------------------------------------
 
     def run(self) -> None:
@@ -197,7 +197,7 @@ class RenderOrchestrator:
             raise RenderError(msg) from exc
 
         self._current_frame = 0
-        self._uploaded_paths: set[str] = set()  # rutas ya procesadas
+        self._uploaded_paths: set[str] = set()  # paths already processed
         upload_pool = ThreadPoolExecutor(max_workers=2)
 
         try:
