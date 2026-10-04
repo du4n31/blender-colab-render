@@ -1,4 +1,4 @@
-"""Configuration y constantes del proyecto."""
+"""Project configuration and constants."""
 
 import re
 from pathlib import Path
@@ -34,20 +34,20 @@ BLENDER_DIR_NAME = f"blender-{BLENDER_VERSION}-linux-x64"
 # Binary path inside the .tar.xz archive (moved in Blender >= 4.0)
 BLENDER_BINARY_RELATIVE = Path(f"blender-{BLENDER_VERSION}-linux-x64/blender")
 
-# --- Directorios ---
+# --- Directories ---
 DRIVE_MOUNT_POINT = Path("/content/drive")
 RENDER_TMP_DIR = Path("/content/render_tmp")
 PROJECT_DIR_IN_DRIVE = Path("MyDrive/BlenderColabRender")
 STATE_DIR_NAME = "_estado"
 STATE_FILE_NAME = "render_state.json"
 
-# Patron para los frames renderings (Blender reemplaza ##### por el numero)
+# Pattern for rendered frames (Blender replaces ##### with the frame number)
 RENDER_OUTPUT_PATTERN = "frame_######"
 
-# --- Subida ---
-BACKLOG_LIMIT = 5  # max frames locales pendientes de subir antes de pausar
+# --- Uploads ---
+BACKLOG_LIMIT = 5  # maximum local frames waiting for upload before pausing
 
-# --- URLs de descarga ---
+# --- Download URLs ---
 DOWNLOAD_TIMEOUT_SECONDS = 120
 CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB
 
