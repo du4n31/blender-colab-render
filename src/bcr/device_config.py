@@ -70,7 +70,7 @@ def _enable_gpu_devices(cprefs, backend: str) -> None:
         cprefs.compute_device_type = "NONE"
         msg = (
             f"WARNING: requested GPU was not detected ({backend}). "
-            "Se continua en CPU. Verifica que la T4 de Colab este disponible."
+            "Continuing on CPU. Verify that a Colab T4 GPU is available."
         )
         print(f"[device_config] {msg}")
 
