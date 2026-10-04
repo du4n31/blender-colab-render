@@ -55,7 +55,7 @@ def acquire_script(method: str, value: str, dest_dir: Path) -> Path:
         sys.path.insert(0, str(extracted_dir))
         return entry_point
 
-    # Si no es .py, renombrar
+    # If it is not a .py file, rename it
     if local_path.suffix != ".py":
         new_path = local_path.with_suffix(".py")
         local_path.rename(new_path)
@@ -77,7 +77,7 @@ def collect_script_args(
         tmp_dir: Temporary directory for acquiring scripts.
 
     Returns:
-        Lista de argumentos para subprocess: ``['--python', '/ruta/script1.py', ...]``
+        List of subprocess arguments: ``['--python', '/path/script1.py', ...]``
     """
     args: list[str] = []
     for method, value in sources:
