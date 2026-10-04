@@ -28,16 +28,16 @@ _FOLDER_SECRET_NAME = "GDRIVE_FOLDER_ID"
 
 
 class DriveBackendError(Exception):
-    """Error al usar el backend de Drive via API (service account)."""
+    """Error raised by the Drive API backend (service account)."""
 
 
 class ServiceAccountDriveBackend:
     """Backend de Drive que usa la API v3 con una service account.
 
     Cumple el mismo rol que drive_sync.py + state_manager.py cuando Drive
-    esta montado (subir frames, crear carpetas, listar frames existentes,
-    guardar/cargar estado), pero sin drive.mount() ni intervencion humana:
-    la autenticacion es por service account, leida desde secretos de Colab.
+    is mounted (upload frames, create folders, list existing frames,
+    save/load state), without drive.mount() or interactive authorization:
+    authentication uses a service account read from Colab Secrets.
     """
 
     def __init__(self, service, root_folder_id: str):
@@ -53,7 +53,7 @@ class ServiceAccountDriveBackend:
 
     @classmethod
     def from_colab_secrets(cls) -> "ServiceAccountDriveBackend":
-        """Construye el backend leyendo credenciales desde secretos de Colab.
+        """Build the backend by reading credentials from Colab Secrets.
 
         Raises:
             DriveBackendError: si falta un secreto, el JSON es invalido,
@@ -70,7 +70,7 @@ class ServiceAccountDriveBackend:
             sa_raw = userdata.get(_SA_SECRET_NAME)
         except Exception as exc:
             msg = (
-                f"No se pudo leer el secreto '{_SA_SECRET_NAME}'. Creal en "
+                f"Could not read the secret '{_SA_SECRET_NAME}'. Create it in "
                 "Colab -> Secretos, con el JSON completo de la service "
                 "account, y activa el acceso para este notebook."
             )
@@ -80,7 +80,7 @@ class ServiceAccountDriveBackend:
             folder_id = userdata.get(_FOLDER_SECRET_NAME)
         except Exception as exc:
             msg = (
-                f"No se pudo leer el secreto '{_FOLDER_SECRET_NAME}'. Creal "
+                f"Could not read the secret '{_FOLDER_SECRET_NAME}'. Create it "
                 "en Colab -> Secretos, con el ID de la carpeta de Drive "
                 "(la parte final de su URL)."
             )
@@ -106,7 +106,7 @@ class ServiceAccountDriveBackend:
             creds = Credentials.from_service_account_info(sa_info, scopes=_DRIVE_SCOPES)
             service = build("drive", "v3", credentials=creds, cache_discovery=False)
         except Exception as exc:
-            msg = f"No se pudo autenticar con la service account: {exc}"
+            msg = f"Could not authenticate with the service account: {exc}"
             raise DriveBackendError(msg) from exc
 
         backend = cls(service, folder_id)
@@ -114,10 +114,10 @@ class ServiceAccountDriveBackend:
         return backend
 
     def ensure_connected(self) -> bool:
-        """Verifica que la carpeta raiz sea accesible con estas credenciales.
+        """Verify that the root folder is accessible with these credentials.
 
         Returns:
-            True si la carpeta es accesible.
+            True if the folder is accessible.
 
         Raises:
             DriveBackendError: si la carpeta no existe, no es una carpeta,
@@ -131,14 +131,14 @@ class ServiceAccountDriveBackend:
             )
         except Exception as exc:
             msg = (
-                f"No se pudo acceder a la carpeta {self._root_folder_id}. "
+                f"Could not access folder {self._root_folder_id}. "
                 "Verifica que la compartiste con el email de la service "
                 f"account (client_email dentro del JSON). Detalle: {exc}"
             )
             raise DriveBackendError(msg) from exc
 
         if meta.get("mimeType") != _FOLDER_MIME_TYPE:
-            msg = f"{self._root_folder_id} no es una carpeta de Drive."
+            msg = f"{self._root_folder_id} is not a Google Drive folder."
             raise DriveBackendError(msg)
         return True
 
@@ -151,12 +151,12 @@ class ServiceAccountDriveBackend:
 
         Args:
             relative_path: Subcarpetas separadas por "/", relativas a la
-                carpeta raiz (GDRIVE_FOLDER_ID). Cadena vacia = la raiz.
+                root folder (GDRIVE_FOLDER_ID). An empty string means the root folder.
 
         Returns:
-            El folder_id (str) de la carpeta final. Se puede pasar donde
+            The final folder_id (str). Pass it wherever
             drive_sync/state_manager esperan un Path -- este backend solo
-            necesita el string, nunca lo trata como ruta de filesystem.
+            the ID string is needed; it is never treated as a filesystem path.
         """
         relative_path = relative_path.strip("/")
         if relative_path in self._folder_cache:
@@ -184,7 +184,7 @@ class ServiceAccountDriveBackend:
         try:
             created = self._service.files().create(body=metadata, fields="id").execute()
         except Exception as exc:
-            msg = f"Error al crear la carpeta '{name}' en Drive: {exc}"
+            msg = f"Failed to create folder '{name}' en Drive: {exc}"
             raise DriveBackendError(msg) from exc
         return created["id"]
 
@@ -202,7 +202,7 @@ class ServiceAccountDriveBackend:
                 .execute()
             )
         except Exception as exc:
-            msg = f"Error al buscar '{name}' en Drive: {exc}"
+            msg = f"Failed to find '{name}' en Drive: {exc}"
             raise DriveBackendError(msg) from exc
         files = resp.get("files", [])
         return files[0] if files else None
@@ -226,7 +226,7 @@ class ServiceAccountDriveBackend:
         salidas por frame), o usa frame_%06d.ext si preserve_name=False.
 
         Args:
-            local_path: Ruta local al archivo rendering.
+            local_path: Local path to the rendered file.
             folder_id: folder_id (str) de la carpeta de salida en Drive.
             frame_num: Numero de frame (para el nombre fallback).
             subdir: Subcarpeta opcional (ej: nombre del nodo File Output).
@@ -253,7 +253,7 @@ class ServiceAccountDriveBackend:
         try:
             from googleapiclient.http import MediaFileUpload
         except ImportError as exc:
-            msg = "Falta google-api-python-client para subir archivos."
+            msg = "google-api-python-client is required to upload files."
             raise DriveBackendError(msg) from exc
 
         try:
@@ -275,7 +275,7 @@ class ServiceAccountDriveBackend:
         except DriveBackendError:
             raise
         except Exception as exc:
-            msg = f"Error al subir '{dest_filename}' a Drive: {exc}"
+            msg = f"Failed to upload '{dest_filename}' a Drive: {exc}"
             raise DriveBackendError(msg) from exc
 
         return result
@@ -283,7 +283,7 @@ class ServiceAccountDriveBackend:
     def list_frame_numbers(self, folder_id) -> list:
         """Lista numeros de frame ya subidos, recorriendo subcarpetas.
 
-        Usa extract_frame_number() (exactamente 6 digitos) -- la misma
+        Uses extract_frame_number() (exactly six digits), the same
         funcion que usa el orquestador para detectar "Saved:" y que usa
         drive_sync.list_frames_in_drive -- para mantener consistencia.
         """
@@ -305,7 +305,7 @@ class ServiceAccountDriveBackend:
                         .execute()
                     )
                 except Exception as exc:
-                    msg = f"Error al listar archivos en Drive: {exc}"
+                    msg = f"Failed to list files in Drive: {exc}"
                     raise DriveBackendError(msg) from exc
 
                 for entry in resp.get("files", []):
