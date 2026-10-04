@@ -240,14 +240,26 @@ def _resolve_script_in_dir(extract_dir: Path) -> list[Path]:
     entry_point_file = extract_dir / "entry_point.txt"
     if entry_point_file.exists():
         entry_rel = entry_point_file.read_text(encoding="utf-8").strip()
-        entry_path = (extract_dir / entry_rel).resolve()
+        resolved_root = extract_dir.resolve()
+        entry_path = (resolved_root / entry_rel).resolve()
+        try:
+            entry_path.relative_to(resolved_root)
+        except ValueError as exc:
+            msg = (
+                f"entry_point.txt points outside the extraction directory: "
+                f"'{entry_rel}'"
+            )
+            raise SourceAcquisitionError(msg) from exc
         if not entry_path.exists():
             msg = (
                 f"entry_point.txt points to '{entry_rel}' "
                 f"but it does not exist in {extract_dir}"
             )
             raise SourceAcquisitionError(msg)
-        return [entry_path, extract_dir.resolve()]
+        if not entry_path.is_file() or entry_path.suffix.lower() != ".py":
+            msg = f"entry_point.txt must point to an existing .py file: '{entry_rel}'"
+            raise SourceAcquisitionError(msg)
+        return [entry_path, resolved_root]
 
     py_files = sorted(extract_dir.rglob("*.py"))
     if len(py_files) == 1:
