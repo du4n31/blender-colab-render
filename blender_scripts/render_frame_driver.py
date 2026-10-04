@@ -230,21 +230,15 @@ def _remap_file_output_nodes(
 
         # Limpiar la ruta original: eliminar prefijos Windows y normalizar
         # P. ej. "C:\\Users\\..." -> "Users/...", "/tmp\\" -> "tmp"
-        cleaned = old_base.replace("\\", "/")
-        # Extraer solo la parte relativa (quitar C:/, etc.)
-        parts = [p for p in cleaned.split("/") if p and not p.endswith(":")]
-        suffix = "_".join(parts) if parts else node_name
-
-        new_base = f"{output_dir}/{suffix}"
+        # Use the node name, never the artist workstation path, for output folders.
+        safe_node_name = re.sub(r"[^A-Za-z0-9_]+", "_", node_name).strip("_") or "compositor_output"
+        new_base = str(Path(output_dir) / safe_node_name)
         node.directory = new_base
 
-        # Detectar si este nodo es EXR Multilayer.
-        # En nodos multilayer, file_output_items son nombres de capa dentro
-        # del .exr combinado, no nombres de archivo separados.
+        # Multilayer output stores layer names inside a single EXR file.
         is_multilayer = (
             getattr(node.format, "file_format", "") == "OPEN_EXR_MULTILAYER"
         )
-        safe_node_name = re.sub(r"[^A-Za-z0-9_]+", "_", node_name)
 
         if is_multilayer:
             # En EXR multilayer, el marcador de frame va en file_name (que
