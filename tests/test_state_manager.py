@@ -98,20 +98,20 @@ class TestReconcileWithFiles:
         assert result == 5
 
     def test_files_ahead_of_state(self, tmp_drive_dir: Path):
-        """Si hay archivos hasta 10 pero el estado dice 5, usa 5."""
+        """Verified contiguous files remain usable when the checkpoint is stale."""
         for i in range(1, 11):
             (tmp_drive_dir / f"frame_{i:06d}.png").touch()
         result = reconcile_with_files(tmp_drive_dir, state_last_frame=5)
-        assert result == 5
+        assert result == 10
 
     def test_mixed_file_types(self, tmp_drive_dir: Path):
-        """Archivos que no son frame_* se ignoran."""
+        """Compositor-style names are recognized and frame gaps are not skipped."""
         (tmp_drive_dir / "frame_000001.png").touch()
         (tmp_drive_dir / "frame_000003.png").touch()
         (tmp_drive_dir / "README.txt").touch()
         (tmp_drive_dir / "output.exr").touch()
         result = reconcile_with_files(tmp_drive_dir, state_last_frame=10)
-        assert result == 3
+        assert result == 1
 
     def test_exr_files_detected(self, tmp_drive_dir: Path):
         """Archivos .exr con nombre frame_* son detectados."""
