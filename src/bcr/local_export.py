@@ -21,7 +21,7 @@ def package_output(output_dir: Path, output_name: str = "render_output") -> Path
         output_name: Nombre base del .zip (default: "render_output").
 
     Returns:
-        Path al archivo .zip creado.
+        Path to the created .zip archive.
 
     Raises:
         LocalExportError: if the directory does not exist or is empty.
@@ -81,7 +81,7 @@ def check_disk_space(
 
     Returns:
         (ok, mensaje) — ok=True si hay espacio suficiente,
-        ok=False con mensaje de advertencia si no.
+        ok=False with a warning message otherwise.
     """
     output_dir = Path(output_dir)
 
