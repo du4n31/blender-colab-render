@@ -312,11 +312,10 @@ class RenderOrchestrator:
         return None
 
     def _is_valid_output_path(self, path: Path) -> bool:
-        """Validate that the path is under the managed output directory.
+        r"""Validate that a path is inside the managed output directory.
 
-        Descarta rutas Windows (C:\...), rutas arbitrarias fuera de
-        /content/render_tmp, etc. que Blender podria imprimir si los
-        File Output nodes no fueron remapeados correctamente.
+        Reject Windows paths (C:\\...), arbitrary paths outside output_dir,
+        and files from compositor nodes that were not remapped correctly.
         """
         try:
             path.relative_to(self.output_dir)
