@@ -126,7 +126,7 @@ class RenderOrchestrator:
         output_pattern = str(self.output_dir / RENDER_OUTPUT_PATTERN)
         cmd.extend(["--render-output", output_pattern])
 
-        # Audio desactivado (por defecto en background mode, pero explicito no duele)
+        # Disable audio (normally off in background mode, but be explicit).
         cmd.append("-noaudio")
 
         # Frame range and render trigger
@@ -222,7 +222,7 @@ class RenderOrchestrator:
                         continue
                     self._uploaded_paths.add(path_key)
 
-                    # Actualizar metricas solo cuando cambia el frame
+                    # Update metrics only when the frame changes
                     if frame_num != self._current_frame:
                         self._current_frame = frame_num
                         now = time.time()
@@ -260,7 +260,7 @@ class RenderOrchestrator:
             upload_pool.shutdown(wait=True)
             self._cleanup_process()
 
-        # Finalizar segun modo
+        # Finalize according to output mode
         if self.output_target == "drive":
             self._reconcile_pending()
         elif self.output_target == "zip_download":
@@ -283,7 +283,7 @@ class RenderOrchestrator:
 
         The frame number is extracted as a block of exactly six digits
         en cualquier posicion del nombre (no solo antes de la extension).
-        Esto cubre tanto nodos single-layer (item.name + ######) como
+        This covers both single-layer nodes (item.name + ######) and
         nodos multilayer (file_name + ######).
 
         Ignore disposable files (_discard_, _render_result_) that
@@ -324,9 +324,9 @@ class RenderOrchestrator:
             return False
 
     def _compute_subdir(self, path: Path) -> str:
-        """Deriva el subdirectorio relativo para organizar en Drive.
+        """Derive the relative subdirectory used to organize output in Drive.
 
-        Si el archivo esta en output_dir/subdir/archivo.ext, retorna
+        If a file is in output_dir/subdir/file.ext, return
         'subdir' (el nodo que lo produjo). Si esta directamente en
         output_dir, retorna '' (raiz).
 
@@ -369,7 +369,7 @@ class RenderOrchestrator:
         return None
 
     # ------------------------------------------------------------------
-    # Subida a Drive
+    # Drive uploads
     # ------------------------------------------------------------------
 
     def _dispatch_upload(self, local_path: Path, frame_num: int, subdir: str = "") -> None:
@@ -394,7 +394,7 @@ class RenderOrchestrator:
         Args:
             local_path: Local path to the rendered file.
             frame_num: Numero de frame.
-            subdir: Subdirectorio en Drive para organizar multiples
+            subdir: Drive subdirectory used to organize multiple
                 salidas (ej: nombre del nodo File Output).
         """
         try:
@@ -494,7 +494,7 @@ class RenderOrchestrator:
     # ------------------------------------------------------------------
 
     def _reconcile_pending(self) -> None:
-        """Al finalizar (o si el proceso se cae), sube frames pendientes."""
+        """Upload pending frames at completion or after a process failure."""
         if self._reconcile_done:
             return
         self._reconcile_done = True
@@ -502,7 +502,7 @@ class RenderOrchestrator:
         print("[orchestrator] Reconciling pending frames...", file=sys.stderr)
 
         # Subir frames locales que no se hayan subido
-        # Usa rglob para encontrar archivos en subdirectorios (los File Output
+        # Use rglob to find files in subdirectories (File Output
         # nodes remapeados pueden crear subdirectorios en output_dir).
         if self.output_dir.exists():
             for f in sorted(self.output_dir.rglob("*")):
