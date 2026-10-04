@@ -53,21 +53,21 @@ def trigger_download(zip_path: Path) -> None:
         zip_path: Path to the .zip archive to download.
 
     Raises:
-        LocalExportError: si el archivo .zip no existe.
+        LocalExportError: if the .zip archive does not exist.
     """
     zip_path = Path(zip_path)
 
     if not zip_path.exists():
-        msg = f"El archivo .zip no existe: {zip_path}"
+        msg = f"The .zip archive does not exist: {zip_path}"
         raise LocalExportError(msg)
 
     try:
-        # google.colab solo esta disponible en entorno Colab
+        # google.colab is only available in the Colab environment
         from google.colab import files  # type: ignore[import-untyped]
 
         files.download(str(zip_path))
     except ImportError:
-        print(f"Entorno no-Colab: el archivo esta en {zip_path}")
+        print(f"Non-Colab environment: the archive is at {zip_path}")
 
 
 def check_disk_space(
