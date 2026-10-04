@@ -124,7 +124,7 @@ def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
         return 0
 
 
-def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None) -> int:
+def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None, frame_start: int = 1) -> int:
     """Return the last contiguous frame confirmed by both state and stored files."""
     if backend is not None:
         frames_on_disk = backend.list_frame_numbers(drive_path)
@@ -136,8 +136,10 @@ def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None) 
         return 0
 
     # Never skip a missing frame after a partially completed parallel upload.
-    contiguous_last = ordered[0] - 1
+    contiguous_last = frame_start - 1
     for frame_number in ordered:
+        if frame_number < frame_start:
+            continue
         if frame_number != contiguous_last + 1:
             break
         contiguous_last = frame_number
