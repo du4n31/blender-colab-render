@@ -25,15 +25,15 @@ def resolve_download_url(url: str) -> str:
         return _resolve_google_drive(url)
     if "mediafire.com" in domain:
         return _resolve_mediafire(url)
-    # Enlace directo o proveedor desconocido
+    # Direct link or unknown provider
     if _is_direct_link(url):
         return url
-    msg = f"No se pudo resolver el enlace: proveedor no soportado ({domain})"
+    msg = f"Could not resolve link: unsupported provider ({domain})"
     raise LinkResolutionError(msg)
 
 
 def _is_direct_link(url: str) -> bool:
-    """Heuristica basica: enlaces que probablemente sirvan el archivo directamente."""
+    """Basic heuristic for links that likely serve the file directly."""
     parsed = urllib.parse.urlparse(url)
     path = parsed.path.lower()
     # Extensiones de archivo tipicas
@@ -82,7 +82,7 @@ def _resolve_google_drive(url: str) -> str:
         file_id = _extract_google_drive_id(url)
 
     if not file_id:
-        msg = f"No se pudo extraer file_id de la URL de Google Drive: {url}"
+        msg = f"Could not extract file_id from the Google Drive URL: {url}"
         raise LinkResolutionError(msg)
 
     # Direct-download URL with confirmation
