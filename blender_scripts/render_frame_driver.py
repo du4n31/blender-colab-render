@@ -1,17 +1,17 @@
-"""Script driver que se ejecuta DENTRO del Python embebido de Blender.
+"""Driver script executed INSIDE Blender's embedded Python runtime.
 
-Configura el dispositivo (GPU/CPU/OptiX) y el modo de salida (compositor/sequencer)
-antes de que comience el render.
+Configure the device (GPU/CPU/OptiX) and output mode (compositor/sequencer)
+before rendering begins.
 
-Usa SOLO la libreria estandar de Python + bpy. No importa nada del paquete src/bcr/
-porque Blender no tiene acceso a ese entorno pip.
+Use ONLY the Python standard library and bpy. Do not import from src/bcr/
+because Blender cannot access the notebook kernel's pip environment.
 
-Uso (desde linea de comandos de Blender):
+Usage (from the Blender command line):
     blender --background scene.blend --python render_frame_driver.py \\
         --render-output /tmp/frame_##### --render-anim -- \\
         --cycles-device OPTIX --output-mode compositor
 
-Los argumentos despues de -- se reciben en sys.argv.
+Arguments after -- are received in sys.argv.
 """
 
 import re
@@ -20,10 +20,10 @@ from pathlib import Path
 
 
 def main() -> None:
-    """Punto de entrada: configura y lanza el render."""
+    """Entry point: configure and launch the render."""
     import bpy
 
-    # Parsear argumentos personalizados (despues de --)
+    # Parse custom arguments (after --)
     device = "OPTIX"
     output_mode = "compositor"
 
@@ -33,12 +33,12 @@ def main() -> None:
     if args.get("output-mode"):
         output_mode = args["output-mode"]
 
-    # Determinar el directorio base limpio (sin patron # de Blender)
+    # Determine the clean base directory (without Blender's # pattern)
     if args.get("output-dir"):
-        # --output-dir tiene prioridad: ruta limpia explicitamente
+        # --output-dir takes precedence: explicit clean output path
         output_dir = args["output-dir"]
     elif args.get("render-output"):
-        # Fallback: derivar de --render-output quitando el patron #
+        # Fallback: derive from --render-output by removing the # pattern
         raw = args["render-output"]
         if re.search(r"#+", raw):
             output_dir = str(Path(raw).parent)
@@ -47,7 +47,7 @@ def main() -> None:
     else:
         output_dir = "/content/render_tmp"
 
-    # 1. Configurar dispositivo
+    # 1. Configure device
     _configure_device(device)
 
     # 2. Configure output mode and force the direct render path into the managed directory.
@@ -61,17 +61,17 @@ def main() -> None:
     # 4. Remap compositor File Output nodes into clean, managed output folders.
     _remap_file_output_nodes(output_dir, output_mode)
 
-    print(f"[driver] Dispositivo: {device}")
+    print(f"[driver] Device: {device}")
     print(f"[driver] Modo de salida: {output_mode}")
-    print("[driver] Render listo para comenzar.")
+    print("[driver] Render is ready to start.")
 
 
 def _parse_custom_args(argv: list[str]) -> dict[str, str]:
-    """Parsea argumentos --clave valor de sys.argv.
+    """Parse --key value arguments from sys.argv.
 
-    Blender pasa sus propios args primero; los nuestros llegan despues de --.
-    Buscamos especificamente --cycles-device, --output-mode, --output-dir
-    y --render-output.
+    Blender passes its own arguments first; ours arrive after --.
+    We specifically look for --cycles-device, --output-mode, --output-dir,
+    and --render-output.
     """
     result: dict[str, str] = {}
 
@@ -132,7 +132,7 @@ def _audit_video_media() -> None:
 
 
 def _configure_device(backend: str) -> None:
-    """Configura el dispositivo de render GPU/CPU/OptiX.
+    """Configure the GPU/CPU/OptiX render device.
 
     En background mode, Blender no puebla la lista de dispositivos
     automaticamente -- hay que llamar a get_devices() explicitamente.
@@ -151,11 +151,11 @@ def _configure_device(backend: str) -> None:
         print("[driver] Device: CPU")
         return
 
-    # Extraer backend limpio (ej: "OPTIX+CPU" -> "OPTIX")
+    # Extract the base backend (e.g. "OPTIX+CPU" -> "OPTIX")
     clean_backend = backend.upper().replace("+CPU", "")
     cprefs.compute_device_type = clean_backend
 
-    # Obligatorio en background mode
+    # Required in background mode
     cprefs.get_devices()
 
     has_gpu = False
@@ -172,13 +172,13 @@ def _configure_device(backend: str) -> None:
         scene.cycles.device = "CPU"
         cprefs.compute_device_type = "NONE"
         print(
-            f"[driver] WARNING: no GPU detected ({clean_backend}), "
-            "se continua en CPU"
+            f"[driver] WARNING: no GPU detected ({clean_backend}); "
+            "continuing on CPU"
         )
 
 
 def _configure_output_mode(mode: str) -> None:
-    """Configura si el output usa el compositor o el sequencer.
+    """Configure whether output uses the compositor or sequencer.
 
     Args:
         mode: 'compositor' o 'sequencer'
