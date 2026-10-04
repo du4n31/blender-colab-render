@@ -71,7 +71,7 @@ def extract_frame_number(name: str) -> Optional[int]:
         None
         >>> extract_frame_number("file_name1frane.exr")   # 1 digito
         None
-        >>> extract_frame_number("File_Output_000023_000001.exr")  # ultimo bloque
+        >>> extract_frame_number("File_Output_000023_000001.exr")  # last block
         1
     """
     import re
@@ -118,6 +118,6 @@ def validate_drive_path(path: str) -> Path:
 
 
 def validate_url(url: str) -> bool:
-    """Valida formato basico de URL."""
+    """Validate the basic URL format."""
     pattern = r"^https?://[^\s/$.?#].[^\s]*$"
     return bool(re.match(pattern, url))
