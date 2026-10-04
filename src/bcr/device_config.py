@@ -1,6 +1,6 @@
 """Configure the render device (GPU/CPU/OptiX) inside Blender.
 
-Este script esta disenado para ejecutarse DENTRO del Python embebido de Blender
+This script is designed to run INSIDE Blender's embedded Python runtime
 via blender --python device_config.py. Usa solo bpy + stdlib.
 """
 
@@ -13,7 +13,7 @@ def configure_device(backend: str) -> None:
 
     Args:
         backend: 'CPU', 'CUDA', 'OPTIX', 'HIP', 'ONEAPI', o 'METAL'.
-                 Se puede anadir +CPU para usar ambos (ej: 'OPTIX+CPU').
+                 Append +CPU to use both (e.g. 'OPTIX+CPU').
 
     Returns:
         None. Prints warnings if the requested GPU is not found.
@@ -43,7 +43,7 @@ def configure_device(backend: str) -> None:
     clean_backend = backend.upper().replace("+CPU", "")
     cprefs.compute_device_type = clean_backend
 
-    # Required in background mode: get_devices() puebla la lista
+    # Required in background mode: get_devices() populates the device list
     cprefs.get_devices()
 
     _enable_gpu_devices(cprefs, clean_backend)
@@ -76,7 +76,7 @@ def _enable_gpu_devices(cprefs, backend: str) -> None:
 
 
 def parse_device_args(argv: list[str]) -> tuple[Optional[str], Optional[str]]:
-    """Parsea `--cycles-device` y `--output-mode` de sys.argv.
+    """Parse `--cycles-device` and `--output-mode` from sys.argv.
 
     Los argumentos personalizados llegan despues de `--` en la linea de comandos
     de Blender.
