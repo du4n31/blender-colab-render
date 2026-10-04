@@ -74,13 +74,13 @@ class RenderOrchestrator:
         self.output_target = output_target
         self.custom_script_paths = custom_script_paths or []
         self.progress_callback = progress_callback
-        # Backend opcional de Drive (ej. ServiceAccountDriveBackend). Si es
+        # Optional Drive backend (e.g. ServiceAccountDriveBackend). If
         # If None (default), frame uploads and state persistence use the
         # mounted filesystem as before; see _dispatch_upload
         # y _dispatch_save_state.
         self.drive_backend = drive_backend
 
-        # Estado interno
+        # Internal state
         self._process: Optional[subprocess.Popen] = None
         self._current_frame = 0
         self._frame_times: list[float] = []
@@ -96,13 +96,13 @@ class RenderOrchestrator:
     # ------------------------------------------------------------------
 
     def build_command(self) -> list[str]:
-        """Construye la lista de argumentos para Blender en el ORDEN correcto.
+        """Build the Blender argument list in the correct order.
 
         El orden critical (ver docs de Blender):
             1. --background
             2. blend file (after the .blend file, --render-output is not overwritten)
             3. motor, python scripts, output
-            4. render trigger (--render-anim o --render-frame) AL FINAL
+            4. render trigger (--render-anim o --render-frame) # LAST
             5. -- seguido de opciones de Cycles
         """
         cmd: list[str] = [
@@ -155,7 +155,7 @@ class RenderOrchestrator:
 
         Launch Blender as a subprocess and monitor stdout in real time,
         uploading frames to Drive incrementally according to ``output_target``
-        o los mantiene locales para empaquetar al final.
+        or keep them local for packaging at the end.
         """
         if self.output_target == "zip_download":
             ok, msg = check_disk_space(self.output_dir)
@@ -203,7 +203,7 @@ class RenderOrchestrator:
         try:
             for line in self._process.stdout or []:
                 line = line.rstrip("\n")
-                print(line, file=sys.stderr)  # re-enviar a stderr para visibilidad
+                print(line, file=sys.stderr)  # Forward to stderr for visibility
 
                 # Detect completed frames using the exact path reported by Blender
                 result = self._parse_saved_line(line)
@@ -212,7 +212,7 @@ class RenderOrchestrator:
 
                     # Validate that the path is under output_dir (filters
                     # paths Windows como C:\Users\... que Blender imprime
-                    # si los File Output nodes no fueron remapeados).
+                    # if File Output nodes were not remapped).
                     if not self._is_valid_output_path(local_path):
                         continue
                     if local_path.suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
@@ -278,13 +278,13 @@ class RenderOrchestrator:
     ) -> Optional[tuple[int, Path]]:
         """Detecta lineas 'Saved: '<ruta>'' y extrae (frame, ruta_exacta).
 
-        Blender imprime lineas como:
+        Blender prints lines such as:
             Saved: '/content/render_tmp/Result_000001.exr'
             Saved: '/content/render_tmp/File_Output_001_000001.exr'
             Time: 00:00.53 (Saving: 00:00.08)
 
         The frame number is extracted as a block of exactly six digits
-        en cualquier posicion del nombre (no solo antes de la extension).
+        anywhere in the filename (not only before the extension).
         This covers both single-layer nodes (item.name + ######) and
         nodos multilayer (file_name + ######).
 
@@ -302,7 +302,7 @@ class RenderOrchestrator:
         path_str = match.group(1)
 
         # Ignore disposable files (direct render output,
-        # no de File Output nodes).
+        # not File Output node output).
         if "_discard_" in path_str or "_render_result_" in path_str:
             return None
 
@@ -329,17 +329,17 @@ class RenderOrchestrator:
         """Derive the relative subdirectory used to organize output in Drive.
 
         If a file is in output_dir/subdir/file.ext, return
-        'subdir' (el nodo que lo produjo). Si esta directamente en
-        output_dir, retorna '' (raiz).
+        'subdir' (the node that produced it). If it is directly in
+        output_dir, return '' (the root).
 
         Ejemplos:
             path=/content/render_tmp/Temp/beauty_0001.exr
             output_dir=/content/render_tmp
-            -> retorna 'Temp'
+            -> return 'Temp'
 
             path=/content/render_tmp/frame_00001.png
             output_dir=/content/render_tmp
-            -> retorna ''
+            -> return ''
         """
         try:
             rel = path.relative_to(self.output_dir)
@@ -397,14 +397,14 @@ class RenderOrchestrator:
 
         Args:
             local_path: Local path to the rendered file.
-            frame_num: Numero de frame.
+            frame_num: Frame number.
             subdir: Drive subdirectory used to organize multiple
                 salidas (ej: nombre del nodo File Output).
         """
         try:
             self._dispatch_upload(local_path, frame_num, subdir)
             remove_local(local_path)
-            # Actualizar estado en Drive
+            # Update state in Drive
             self._dispatch_save_state(
                 frame_num,
                 self._requested_total_frames,
