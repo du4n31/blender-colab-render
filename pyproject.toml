@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bcr"
 version = "0.1.0"
-description = "Blender Colab Render - renderiza escenas de Blender en Google Colab"
+description = "Render Blender scenes in Google Colab"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 
