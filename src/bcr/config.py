@@ -1,4 +1,4 @@
-"""Configuracion y constantes del proyecto."""
+"""Configuration y constantes del proyecto."""
 
 import re
 from pathlib import Path
@@ -8,18 +8,18 @@ from typing import Optional
 BLENDER_VERSION = "5.2.0"
 BLENDER_DEFAULT_VERSION = BLENDER_VERSION
 
-# URL base para descargar listado de versiones y archivos
+# Base URL for downloading the version and file listings
 BLENDER_RELEASE_BASE = "https://download.blender.org/release/"
 
 
 def build_blender_download_url(version: str) -> str:
-    """Construye la URL de descarga para una version especifica de Blender.
+    """Build the download URL for a specific Blender version.
 
     Args:
-        version: Version semantica (ej. "5.2.0").
+        version: Semantic version (e.g. "5.2.0").
 
     Returns:
-        URL completa al .tar.xz de Linux x64.
+        Full URL to the Linux x64 .tar.xz archive.
     """
     major_minor = ".".join(version.split(".")[:2])
     return (
@@ -31,7 +31,7 @@ def build_blender_download_url(version: str) -> str:
 BLENDER_DOWNLOAD_URL = build_blender_download_url(BLENDER_VERSION)
 BLENDER_DIR_NAME = f"blender-{BLENDER_VERSION}-linux-x64"
 
-# El binario dentro del .tar.xz (Blender >= 4.0 lo movio de sitio)
+# Binary path inside the .tar.xz archive (moved in Blender >= 4.0)
 BLENDER_BINARY_RELATIVE = Path(f"blender-{BLENDER_VERSION}-linux-x64/blender")
 
 # --- Directorios ---
@@ -41,7 +41,7 @@ PROJECT_DIR_IN_DRIVE = Path("MyDrive/BlenderColabRender")
 STATE_DIR_NAME = "_estado"
 STATE_FILE_NAME = "render_state.json"
 
-# Patron para los frames renderizados (Blender reemplaza ##### por el numero)
+# Patron para los frames renderings (Blender reemplaza ##### por el numero)
 RENDER_OUTPUT_PATTERN = "frame_######"
 
 # --- Subida ---
