@@ -19,7 +19,7 @@ def configure_device(backend: str) -> None:
         None. Prints warnings if the requested GPU is not found.
 
     Raises:
-        ImportError: si bpy no esta disponible.
+        ImportError: if bpy is unavailable.
     """
     try:
         import bpy
