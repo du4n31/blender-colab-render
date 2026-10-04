@@ -1,4 +1,4 @@
-"""Aprovisionamiento del binario portable de Blender.
+"""Provision the portable Blender binary.
 
 Download and extract the .tar.xz archive from download.blender.org.
 Supports a Drive cache to avoid downloading Blender in every Colab session.
