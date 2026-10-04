@@ -157,7 +157,7 @@ class RenderOrchestrator:
         if self.output_target == "zip_download":
             ok, msg = check_disk_space(self.output_dir)
             if not ok:
-                print(f"[orchestrator] ADVERTENCIA: {msg}", file=sys.stderr)
+                print(f"[orchestrator] WARNING: {msg}", file=sys.stderr)
 
         total_frames = self.frame_end - self.frame_start + 1
 
@@ -251,7 +251,7 @@ class RenderOrchestrator:
                 try:
                     future.result()
                 except Exception as exc:
-                    print(f"[orchestrator] Error en subida: {exc}", file=sys.stderr)
+                    print(f"[orchestrator] Upload error: {exc}", file=sys.stderr)
 
         finally:
             upload_pool.shutdown(wait=True)
@@ -406,7 +406,7 @@ class RenderOrchestrator:
             self._pending_frames.discard(frame_num)
         except (DriveSyncError, DriveBackendError) as exc:
             print(
-                f"[orchestrator] Error al subir frame {frame_num}: {exc}",
+                f"[orchestrator] Failed to upload frame {frame_num}: {exc}",
                 file=sys.stderr,
             )
 
@@ -414,8 +414,8 @@ class RenderOrchestrator:
         """Espera a que la cola de subida baje del limite si hay backlog."""
         while len(self._pending_frames) >= BACKLOG_LIMIT:
             print(
-                f"[orchestrator] Backlog de subida ({len(self._pending_frames)}), "
-                "esperando...",
+                f"[orchestrator] Upload backlog ({len(self._pending_frames)}), "
+                "waiting...",
                 file=sys.stderr,
             )
             time.sleep(2)
@@ -467,23 +467,23 @@ class RenderOrchestrator:
 
     def _finalize_zip_download(self) -> None:
         """Empaqueta y descarga el output completo como .zip en modo zip_download."""
-        print("[orchestrator] Empaquetando resultado como .zip...", file=sys.stderr)
+        print("[orchestrator] Packaging output as .zip...", file=sys.stderr)
         if not self.output_dir.exists():
             print(
-                f"[orchestrator] No hay directorio de salida: {self.output_dir}",
+                f"[orchestrator] Output directory does not exist: {self.output_dir}",
                 file=sys.stderr,
             )
             return
         try:
             zip_path = package_output(self.output_dir)
             print(
-                f"[orchestrator] .zip creado: {zip_path} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)",
+                f"[orchestrator] .zip created: {zip_path} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)",
                 file=sys.stderr,
             )
             trigger_download(zip_path)
         except LocalExportError as exc:
             print(
-                f"[orchestrator] Error al empaquetar: {exc}",
+                f"[orchestrator] Packaging error: {exc}",
                 file=sys.stderr,
             )
 
@@ -497,7 +497,7 @@ class RenderOrchestrator:
             return
         self._reconcile_done = True
 
-        print("[orchestrator] Reconciliando frames pendientes...", file=sys.stderr)
+        print("[orchestrator] Reconciling pending frames...", file=sys.stderr)
 
         # Subir frames locales que no se hayan subido
         # Usa rglob para encontrar archivos en subdirectorios (los File Output
@@ -517,12 +517,12 @@ class RenderOrchestrator:
                     self._dispatch_upload(f, frame_num, subdir)
                     remove_local(f)
                     print(
-                        f"[orchestrator] Frame {frame_num} recuperado y subido: {f.name}",
+                        f"[orchestrator] Frame {frame_num} recovered and uploaded: {f.name}",
                         file=sys.stderr,
                     )
                 except (DriveSyncError, DriveBackendError) as exc:
                     print(
-                        f"[orchestrator] Error en reconciliacion: {exc}",
+                        f"[orchestrator] Reconciliation error: {exc}",
                         file=sys.stderr,
                     )
 
