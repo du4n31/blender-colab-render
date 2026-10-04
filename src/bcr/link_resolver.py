@@ -36,7 +36,7 @@ def _is_direct_link(url: str) -> bool:
     """Basic heuristic for links that likely serve the file directly."""
     parsed = urllib.parse.urlparse(url)
     path = parsed.path.lower()
-    # Extensiones de archivo tipicas
+    # Typical file extensions
     direct_extensions = (
         ".blend", ".zip", ".tar.gz", ".tar.xz", ".7z", ".rar",
         ".png", ".jpg", ".jpeg", ".exr", ".tga", ".bmp",
@@ -59,7 +59,7 @@ def _resolve_google_drive(url: str) -> str:
 
     Use gdown.parse_url() to extract the file_id, then build the URL
     for direct download. The actual download is handled by requests
-    (con el parametro de confirmacion para archivos grandes).
+    (including the confirmation parameter for large files).
     """
     try:
         import gdown  # type: ignore[import-untyped]
