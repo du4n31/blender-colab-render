@@ -11,7 +11,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from bcr.config import STATE_DIR_NAME, STATE_FILE_NAME, extract_frame_number
+from bcr.config import (
+    RENDERED_IMAGE_EXTENSIONS,
+    STATE_DIR_NAME,
+    STATE_FILE_NAME,
+    extract_frame_number,
+)
 
 
 class RenderState:
@@ -150,11 +155,10 @@ def _list_frame_numbers(drive_path: Path) -> list[int]:
     if not drive_path.exists():
         return []
 
-    image_extensions = {".png", ".exr", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
     frames: set[int] = set()
     for root, _dirs, files in os.walk(str(drive_path)):
         for entry in files:
-            if Path(entry).suffix.lower() not in image_extensions:
+            if Path(entry).suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
                 continue
             frame_number = extract_frame_number(entry)
             if frame_number is not None:
