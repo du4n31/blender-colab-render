@@ -1,9 +1,9 @@
-"""Prueba de regresion: detecta APIs deprecadas de Blender en el driver.
+"""Regression tests for deprecated Blender APIs in the driver.
 
-Lee el codigo fuente de blender_scripts/render_frame_driver.py como texto
-plano y falla si contiene cadenas que corresponden a propiedades eliminadas
-en Blender 5.0. Esto evita que alguien reintroduzca la API vieja sin darse
-cuenta.
+Read blender_scripts/render_frame_driver.py as plain text
+and fail if it contains references to properties removed
+in Blender 5.0. This prevents accidental reintroduction of the old API.
+
 
 Las propiedades prohibidas son:
   - scene.node_tree           -> usar scene.compositing_node_group
@@ -13,7 +13,7 @@ Las propiedades prohibidas son:
   - scene.use_nodes           -> deprecada; usar scene.render.use_compositing
   - node.inputs["File Name"]  -> usar node.file_name
 
-Esta prueba NO necesita Blender ni Colab: solo parsea texto.
+These tests do not require Blender or Colab; they inspect source text only.
 """
 
 import re
@@ -24,7 +24,7 @@ DRIVER_PATH = Path(__file__).resolve().parents[1] / "blender_scripts" / "render_
 
 
 def _is_comment_or_docstring(line: str) -> bool:
-    """Determina si una linea es comentario o docstring."""
+    """Determine whether a line is a comment or docstring."""
     stripped = line.lstrip()
     if stripped.startswith("#"):
         return True
@@ -34,13 +34,13 @@ def _is_comment_or_docstring(line: str) -> bool:
 
 
 def _find_violations(name: str, pattern: str) -> list[str]:
-    """Busca violaciones de un patron en el driver, ignorando comentarios.
+    """Find driver violations for a pattern, ignoring comments.
 
     Returns:
-        Lista de lineas con violacion (vacia si no hay).
+        List of violating lines (empty when there are none).
     """
     if not DRIVER_PATH.exists():
-        return [f"Archivo no encontrado: {DRIVER_PATH}"]
+        return [f"File not found: {DRIVER_PATH}"]
 
     violations: list[str] = []
     compiled = re.compile(pattern)
