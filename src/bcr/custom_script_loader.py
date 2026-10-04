@@ -1,6 +1,6 @@
-"""Carga y gestion de scripts Python personalizados para el render.
+"""Load and manage custom Python scripts for rendering.
 
-Los scripts se adquieren desde URLs, subida directa o Drive usando
+Scripts are acquired from URLs, direct upload, or Drive using
 source_resolver, y se pasan a Blender via --python adicional.
 """
 
@@ -16,19 +16,19 @@ from bcr.source_resolver import (
 
 
 class ScriptLoadError(Exception):
-    """Error al adquirir o cargar un script personalizado."""
+    """Error raised while acquiring or loading a custom script."""
 
 
 def acquire_script(method: str, value: str, dest_dir: Path) -> Path:
-    """Adquiere un script Python desde un enlace, subida o ruta de Drive.
+    """Acquire a Python script from a URL, upload, or Drive path.
 
     Args:
         method: ``"link"``, ``"upload"`` o ``"drive_path"``.
-        value: URL, ruta en Drive, o ignorado para ``"upload"``.
-        dest_dir: Directorio destino.
+        value: URL or Drive path; ignored for ``"upload"``.
+        dest_dir: Destination directory.
 
     Returns:
-        Ruta al archivo .py adquirido.
+        Path to the acquired .py file.
 
     Raises:
         ScriptLoadError: si falla la adquisicion o el archivo no es .py.
@@ -43,7 +43,7 @@ def acquire_script(method: str, value: str, dest_dir: Path) -> Path:
     except SourceAcquisitionError as exc:
         raise ScriptLoadError(str(exc)) from exc
 
-    # Si es .zip, extraer y localizar entry point
+    # If this is a .zip archive, extract it and locate the entry point
     if local_path.suffix == ".zip":
         try:
             result = resolve_zip_contents(local_path, dest_dir, kind="script")
@@ -51,7 +51,7 @@ def acquire_script(method: str, value: str, dest_dir: Path) -> Path:
             raise ScriptLoadError(str(exc)) from exc
         # result = [entry_point, extracted_dir]
         entry_point, extracted_dir = result[0], result[1]
-        # Agregar el directorio extraido a sys.path para imports relativos
+        # Add the extracted directory to sys.path for relative imports
         sys.path.insert(0, str(extracted_dir))
         return entry_point
 
