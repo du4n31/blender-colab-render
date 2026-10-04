@@ -132,8 +132,8 @@ class ServiceAccountDriveBackend:
         except Exception as exc:
             msg = (
                 f"Could not access folder {self._root_folder_id}. "
-                "Verifica que la compartiste con el email de la service "
-                f"account (client_email dentro del JSON). Detalle: {exc}"
+                "Verify that it was shared with the service-account email "
+                f"account (client_email in the JSON). Details: {exc}"
             )
             raise DriveBackendError(msg) from exc
 
@@ -219,7 +219,7 @@ class ServiceAccountDriveBackend:
         subdir: str = "",
         preserve_name: bool = True,
     ) -> dict:
-        """Sube un frame rendering a Drive via API.
+        """Upload a rendered frame to Drive through the API.
 
         Misma logica de nombrado que drive_sync.upload_frame: preserva el
         original name by default (avoids collisions between multiple
