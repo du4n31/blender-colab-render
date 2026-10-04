@@ -75,8 +75,8 @@ class RenderOrchestrator:
         self.custom_script_paths = custom_script_paths or []
         self.progress_callback = progress_callback
         # Backend opcional de Drive (ej. ServiceAccountDriveBackend). Si es
-        # None (default), la subida y el guardado de estado usan el
-        # filesystem montado exactamente como antes -- ver _dispatch_upload
+        # If None (default), frame uploads and state persistence use the
+        # mounted filesystem as before; see _dispatch_upload
         # y _dispatch_save_state.
         self.drive_backend = drive_backend
 
@@ -100,7 +100,7 @@ class RenderOrchestrator:
 
         El orden critical (ver docs de Blender):
             1. --background
-            2. archivo .blend  (despues del .blend, --render-output no se sobreescribe)
+            2. blend file (after the .blend file, --render-output is not overwritten)
             3. motor, python scripts, output
             4. render trigger (--render-anim o --render-frame) AL FINAL
             5. -- seguido de opciones de Cycles
@@ -120,8 +120,8 @@ class RenderOrchestrator:
         for script_path in self.custom_script_paths:
             cmd.extend(["--python", str(script_path)])
 
-        # Output: usar directorio descartable para la salida directa del render.
-        # Los File Output nodes del compositor son remapeados por el driver
+        # Use a disposable directory for direct render output.
+        # Compositor File Output nodes are remapped by the driver
         # (render_frame_driver.py -> _remap_file_output_nodes()).
         output_pattern = str(self.output_dir / RENDER_OUTPUT_PATTERN)
         cmd.extend(["--render-output", output_pattern])
@@ -129,7 +129,7 @@ class RenderOrchestrator:
         # Audio desactivado (por defecto en background mode, pero explicito no duele)
         cmd.append("-noaudio")
 
-        # Rango de frames y trigger de render
+        # Frame range and render trigger
         total_frames = self.frame_end - self.frame_start + 1
         if total_frames == 1:
             cmd.extend(["--render-frame", str(self.frame_start)])
@@ -153,8 +153,8 @@ class RenderOrchestrator:
     def run(self) -> None:
         """Run the complete render process.
 
-        Lanza Blender como subproceso, monitoriza stdout en tiempo real,
-        y segun ``output_target`` sube frames a Drive incrementalmente
+        Launch Blender as a subprocess and monitor stdout in real time,
+        uploading frames to Drive incrementally according to ``output_target``
         o los mantiene locales para empaquetar al final.
         """
         if self.output_target == "zip_download":
@@ -205,18 +205,18 @@ class RenderOrchestrator:
                 line = line.rstrip("\n")
                 print(line, file=sys.stderr)  # re-enviar a stderr para visibilidad
 
-                # Detectar frames completados (usa la ruta exacta de Blender)
+                # Detect completed frames using the exact path reported by Blender
                 result = self._parse_saved_line(line)
                 if result is not None:
                     frame_num, local_path = result
 
-                    # Validar que la ruta esta bajo nuestro output_dir (filtra
+                    # Validate that the path is under output_dir (filters
                     # paths Windows como C:\Users\... que Blender imprime
                     # si los File Output nodes no fueron remapeados).
                     if not self._is_valid_output_path(local_path):
                         continue
 
-                    # Saltar si ya procesamos esta ruta exacta
+                    # Skip this path if it has already been processed
                     path_key = str(local_path)
                     if path_key in self._uploaded_paths:
                         continue
@@ -230,7 +230,7 @@ class RenderOrchestrator:
                         self._update_metrics()
 
                     if self.output_target == "drive":
-                        # Encolar subida a Drive (en paralelo con el render)
+                        # Queue upload to Drive (in parallel with rendering)
                         if local_path.exists():
                             self._pending_frames.add(frame_num)
                             subdir = self._compute_subdir(local_path)
@@ -242,10 +242,10 @@ class RenderOrchestrator:
                             )
                             self._upload_futures.append(future)
                     elif self.output_target == "zip_download":
-                        # En modo zip_download los frames se quedan en disco
+                        # In zip_download mode, frames remain on disk
                         pass
 
-                    # Verificar backlog (solo en modo drive)
+                    # Check the upload backlog (Drive mode only)
                     if self.output_target == "drive":
                         self._wait_if_backlogged()
 
@@ -281,17 +281,17 @@ class RenderOrchestrator:
             Saved: '/content/render_tmp/File_Output_001_000001.exr'
             Time: 00:00.53 (Saving: 00:00.08)
 
-        El numero de frame se extrae como bloque de exactamente 6 digitos
+        The frame number is extracted as a block of exactly six digits
         en cualquier posicion del nombre (no solo antes de la extension).
         Esto cubre tanto nodos single-layer (item.name + ######) como
         nodos multilayer (file_name + ######).
 
-        Ignora archivos descartables (_discard_, _render_result_) que
-        son la salida directa del render (no de File Output nodes).
+        Ignore disposable files (_discard_, _render_result_) that
+        are direct render output (not File Output node output).
 
         Returns:
-            tuple (int, Path) con numero de frame y ruta exacta,
-            o None si no se pudo extraer o es descartable.
+            tuple (int, Path) containing the frame number and exact path,
+            or None if extraction fails or the file is disposable.
         """
         match = re.search(r"Saved:\s*'([^']+)'", line)
         if not match:
@@ -299,7 +299,7 @@ class RenderOrchestrator:
 
         path_str = match.group(1)
 
-        # Ignorar archivos descartables (salida directa del render,
+        # Ignore disposable files (direct render output,
         # no de File Output nodes).
         if "_discard_" in path_str or "_render_result_" in path_str:
             return None
@@ -312,7 +312,7 @@ class RenderOrchestrator:
         return None
 
     def _is_valid_output_path(self, path: Path) -> bool:
-        """Valida que la ruta este bajo nuestro directorio de salida controlado.
+        """Validate that the path is under the managed output directory.
 
         Descarta rutas Windows (C:\...), rutas arbitrarias fuera de
         /content/render_tmp, etc. que Blender podria imprimir si los
@@ -348,9 +348,9 @@ class RenderOrchestrator:
             return ""
 
     def _find_frame_file(self, frame_num: int) -> Optional[Path]:
-        """Busca el archivo de frame rendering en el directorio temporal.
+        """Find the rendered frame file in the temporary directory.
 
-        Busca cualquier archivo cuyo nombre contenga exactamente 6 digitos
+        Find any file whose name contains exactly six digits
         que coincidan con frame_num.
         """
         if not self.output_dir.exists():
@@ -374,14 +374,14 @@ class RenderOrchestrator:
     # ------------------------------------------------------------------
 
     def _dispatch_upload(self, local_path: Path, frame_num: int, subdir: str = "") -> None:
-        """Sube un frame usando el backend activo (API) o drive_sync (montado)."""
+        """Upload a frame using the active backend (API) or mounted Drive sync."""
         if self.drive_backend is not None:
             self.drive_backend.upload_frame(local_path, self.drive_output_dir, frame_num, subdir)
         else:
             upload_frame(local_path, self.drive_output_dir, frame_num, subdir)
 
     def _dispatch_save_state(self, last_frame: int, total_frames: int) -> None:
-        """Guarda el estado usando el backend activo (API) o state_manager (montado)."""
+        """Save state using the active backend (API) or state_manager (mounted Drive)."""
         save_state(self.drive_output_dir, last_frame, total_frames, backend=self.drive_backend)
 
     def _upload_and_cleanup(
@@ -390,10 +390,10 @@ class RenderOrchestrator:
         frame_num: int,
         subdir: str = "",
     ) -> None:
-        """Sube un frame a Drive y lo borra localmente.
+        """Upload a frame to Drive and remove its local copy.
 
         Args:
-            local_path: Ruta local al archivo rendering.
+            local_path: Local path to the rendered file.
             frame_num: Numero de frame.
             subdir: Subdirectorio en Drive para organizar multiples
                 salidas (ej: nombre del nodo File Output).
@@ -414,7 +414,7 @@ class RenderOrchestrator:
             )
 
     def _wait_if_backlogged(self) -> None:
-        """Espera a que la cola de subida baje del limite si hay backlog."""
+        """Wait for the upload queue to fall below the limit when backlogged."""
         while len(self._pending_frames) >= BACKLOG_LIMIT:
             print(
                 f"[orchestrator] Upload backlog ({len(self._pending_frames)}), "
@@ -432,13 +432,13 @@ class RenderOrchestrator:
         if len(self._frame_times) < 2:
             return
 
-        # Tiempo del ultimo frame (diferencia entre detecciones consecutivas)
+        # Last-frame duration (difference between consecutive detections)
         if len(self._frame_times) >= 2:
             self._last_time = self._frame_times[-1] - self._frame_times[-2]
         else:
             self._last_time = None
 
-        # Tiempo promedio desde el segundo frame en adelante
+        # Average frame duration, starting with the second frame
         if len(self._frame_times) >= 2:
             diffs = [
                 self._frame_times[i] - self._frame_times[i - 1]
@@ -469,7 +469,7 @@ class RenderOrchestrator:
     # ------------------------------------------------------------------
 
     def _finalize_zip_download(self) -> None:
-        """Empaqueta y descarga el output completo como .zip en modo zip_download."""
+        """Package and download all output as a .zip in zip_download mode."""
         print("[orchestrator] Packaging output as .zip...", file=sys.stderr)
         if not self.output_dir.exists():
             print(
