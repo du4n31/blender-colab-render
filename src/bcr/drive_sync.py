@@ -1,4 +1,4 @@
-"""Sincronizacion de frames renderizados con Google Drive.
+"""Sincronizacion de frames renderings con Google Drive.
 
 Drive se monta como sistema de archivos via google.colab.drive.mount(),
 por lo que 'subir' es una copia de archivo con shutil.
@@ -49,14 +49,14 @@ def upload_frame(
     subdir: str = "",
     preserve_name: bool = True,
 ) -> Path:
-    """Copia un frame renderizado desde la instancia a Drive.
+    """Copia un frame rendering desde la instancia a Drive.
 
     Si preserve_name=True (default), usa el nombre original del archivo
     para evitar colisiones cuando hay multiples salidas por frame.
     Si preserve_name=False, usa el patron frame_%06d.ext (compatibilidad).
 
     Args:
-        local_path: Ruta al archivo local del frame renderizado.
+        local_path: Ruta al archivo local del frame rendering.
         drive_output_dir: Directorio de salida en Drive.
         frame_num: Numero de frame (para naming fallback).
         subdir: Subdirectorio opcional (ej: nombre del nodo).
