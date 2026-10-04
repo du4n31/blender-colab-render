@@ -207,7 +207,7 @@ def resolve_blender_version(preferred: Optional[str] = None) -> str:
     preferida o la default con una advertencia.
 
     Returns:
-        Version semantica (ej. "5.2.0").
+        Semantic version (e.g. "5.2.0").
     """
     try:
         available = fetch_available_versions()
