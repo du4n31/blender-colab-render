@@ -90,6 +90,31 @@ class TestReconcileWithFiles:
         result = reconcile_with_files(tmp_drive_dir, state_last_frame=10)
         assert result == 0
 
+    def test_empty_output_with_frame_start_zero_returns_sentinel(self, tmp_drive_dir: Path):
+        """An empty output directory must not imply that frame zero is complete."""
+        result = reconcile_with_files(
+            tmp_drive_dir, state_last_frame=0, frame_start=0
+        )
+        assert result == -1
+
+    def test_non_default_frame_start(self, tmp_drive_dir: Path):
+        """Resume reconciliation supports ranges that start above frame one."""
+        (tmp_drive_dir / "frame_000010.png").touch()
+        (tmp_drive_dir / "frame_000011.png").touch()
+        (tmp_drive_dir / "frame_000013.png").touch()
+        result = reconcile_with_files(
+            tmp_drive_dir, state_last_frame=13, frame_start=10
+        )
+        assert result == 11
+
+    def test_frame_zero_is_detected(self, tmp_drive_dir: Path):
+        """Frame zero is a valid rendered frame when explicitly requested."""
+        (tmp_drive_dir / "frame_000000.png").touch()
+        result = reconcile_with_files(
+            tmp_drive_dir, state_last_frame=0, frame_start=0
+        )
+        assert result == 0
+
     def test_state_ahead_of_files(self, tmp_drive_dir: Path):
         """Si el estado dice frame 10 pero solo hay hasta 5, usa 5."""
         for i in range(1, 6):
