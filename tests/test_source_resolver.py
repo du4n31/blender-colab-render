@@ -282,6 +282,19 @@ class TestResolveZipContents(unittest.TestCase):
         self.assertTrue(extract_dir.exists())
         self.assertEqual(list(extract_dir.iterdir()), [])
 
+    def test_zip_slip_rejects_sibling_with_shared_path_prefix(self) -> None:
+        """Reject traversal into a sibling whose path shares the target prefix."""
+        zip_path = self._tmpdir / "prefix-slip.zip"
+        extract_dir = self._tmpdir / "prefix-slip"
+        extract_dir.mkdir()
+        with zipfile.ZipFile(str(zip_path), "w") as zf:
+            zf.writestr("../prefix-slip-escape/evil.txt", b"malicious")
+
+        with self.assertRaises(SourceAcquisitionError) as ctx:
+            resolve_zip_contents(zip_path, self._tmpdir, "blend")
+        self.assertIn("ZIP slip", str(ctx.exception))
+        self.assertFalse((self._tmpdir / "prefix-slip-escape").exists())
+
     def test_non_zip_blend_returns_path(self) -> None:
         """Archivo no .zip con kind='blend' se devuelve tal cual."""
         non_zip = self._tmpdir / "scene.blend"
