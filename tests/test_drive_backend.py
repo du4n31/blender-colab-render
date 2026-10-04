@@ -235,6 +235,7 @@ class TestListFrameNumbers(unittest.TestCase):
                             "mimeType": "image/x-exr",
                         },
                         {"id": "f3", "name": "notes.txt", "mimeType": "text/plain"},
+                        {"id": "f4", "name": "scene_000003.blend", "mimeType": "application/octet-stream"},
                     ]
                 }
             else:
