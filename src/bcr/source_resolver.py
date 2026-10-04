@@ -201,10 +201,12 @@ def _check_zip_slip(zf: zipfile.ZipFile, extract_dir: Path) -> None:
     resolved_base = extract_dir.resolve()
     for member_name in zf.namelist():
         target_path = (extract_dir / member_name).resolve()
-        if not str(target_path).startswith(str(resolved_base)):
+        try:
+            target_path.relative_to(resolved_base)
+        except ValueError:
             msg = (
-                f"Zip slip detected: entry '{member_name}' "
-                "would extract outside target directory"
+                f"ZIP slip detected: entry '{member_name}' "
+                "would extract outside the target directory"
             )
             raise SourceAcquisitionError(msg)
 
@@ -217,10 +219,10 @@ def _resolve_blend_in_dir(extract_dir: Path) -> Path:
         return blend_files[0].resolve()
 
     if len(blend_files) > 1:
-        disponibles = ", ".join(str(p) for p in blend_files)
+        available = ", ".join(str(p) for p in blend_files)
         msg = (
-            f"Se encontraron {len(blend_files)} archivos .blend, "
-            f"especifica cual usar: {disponibles}"
+            f"Found {len(blend_files)} .blend files; specify which one to use: "
+            f"{available}"
         )
         raise SourceAcquisitionError(msg)
 
@@ -232,8 +234,8 @@ def _resolve_script_in_dir(extract_dir: Path) -> list[Path]:
     """Find the .py entry point in the extracted directory.
 
     If ``entry_point.txt`` exists, use its contents as a relative path.
-    Si no, busca un unico archivo .py. Si hay multiples, pide
-    ``entry_point.txt`` through an error.
+    Otherwise, find a single .py file. If multiple files exist, require
+    an ``entry_point.txt`` file and raise an actionable error.
     """
     entry_point_file = extract_dir / "entry_point.txt"
     if entry_point_file.exists():
@@ -241,7 +243,7 @@ def _resolve_script_in_dir(extract_dir: Path) -> list[Path]:
         entry_path = (extract_dir / entry_rel).resolve()
         if not entry_path.exists():
             msg = (
-                f"entry_point.txt senala a '{entry_rel}' "
+                f"entry_point.txt points to '{entry_rel}' "
                 f"but it does not exist in {extract_dir}"
             )
             raise SourceAcquisitionError(msg)
@@ -253,7 +255,7 @@ def _resolve_script_in_dir(extract_dir: Path) -> list[Path]:
 
     if len(py_files) > 1:
         msg = (
-            f"Se encontraron {len(py_files)} archivos .py en {extract_dir}. "
+            f"Found {len(py_files)} .py files in {extract_dir}. "
             "Create an entry_point.txt file containing the relative path to the entry point."
         )
         raise SourceAcquisitionError(msg)
