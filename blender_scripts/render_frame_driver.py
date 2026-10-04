@@ -62,7 +62,7 @@ def main() -> None:
     _remap_file_output_nodes(output_dir, output_mode)
 
     print(f"[driver] Device: {device}")
-    print(f"[driver] Modo de salida: {output_mode}")
+    print(f"[driver] Output mode: {output_mode}")
     print("[driver] Render is ready to start.")
 
 
@@ -195,8 +195,8 @@ def _configure_output_mode(mode: str) -> None:
         scene.render.use_sequencer = True
     else:
         print(
-            f"[driver] Modo de salida desconocido '{mode}', "
-            "usando compositor por defecto"
+            f"[driver] Unknown output mode '{mode}', "
+            "using compositor mode by default"
         )
         scene.render.use_compositing = True
         scene.render.use_sequencer = False
@@ -210,10 +210,10 @@ def _remap_file_output_nodes(
 
     Los .blend suelen tener rutas absolutas del sistema local del artista
     (Windows: C:\\Users\\...). En Colab (Linux) esas rutas no funcionan.
-    Esta funcion reescribe directory de cada nodo File Output a una ruta
+    This function rewrites each File Output node's directory to a path
     valida en Linux.
 
-    Ademas, desactiva la salida directa del render (scene.render.filepath)
+    It also disables direct render output (scene.render.filepath)
     para que solo los File Output nodes generen archivos.
 
     Para nodos EXR Multilayer, preserva los nombres de item (que son nombres
@@ -221,9 +221,9 @@ def _remap_file_output_nodes(
     frame _###### a cada item.name.
 
     Args:
-        output_dir: Directorio base limpio (sin patron # de Blender) para
+        output_dir: Clean base directory (without Blender's # pattern) for
             los archivos de salida de File Output nodes.
-        output_mode: Modo de salida ('compositor' o 'sequencer').
+        output_mode: Output mode ('compositor' or 'sequencer').
     """
     import bpy
 
@@ -234,11 +234,11 @@ def _remap_file_output_nodes(
         print("[driver] Sequencer mode: File Output nodes are not remapped")
         return
 
-    # Guardar la ruta original (la que puso --render-output) por si
+    # Save the original path (provided by --render-output) in case
     # no hay File Output nodes y tenemos que usarla como fallback.
     original_filepath = scene.render.filepath
 
-    # Redirigir la salida directa del render a un directorio descartable
+    # Redirect direct render output to a disposable directory
     # para que no genere un archivo extra ademas de los File Output nodes.
     scene.render.filepath = f"{output_dir}/_render_result_"
 
@@ -249,12 +249,12 @@ def _remap_file_output_nodes(
     if node_tree is None:
         print(
             "[driver] No compositor node tree is available; "
-            "no se remapean File Outputs"
+            "File Output nodes will not be remapped"
         )
         scene.render.filepath = original_filepath
         return
 
-    # Asegurar que el node tree tiene nodos (puede estar vacio)
+    # Ensure the node tree has nodes (it may be empty)
     if not node_tree.nodes:
         print(f"[driver] Empty node tree; File Output nodes will not be remapped")
         scene.render.filepath = original_filepath
@@ -269,7 +269,7 @@ def _remap_file_output_nodes(
         node_name = node.name
         old_base = getattr(node, "directory", "")
 
-        # Limpiar la ruta original: eliminar prefijos Windows y normalizar
+        # Clean the original path by removing Windows prefixes and normalizing it
         # P. ej. "C:\\Users\\..." -> "Users/...", "/tmp\\" -> "tmp"
         # Use the node name, never the artist workstation path, for output folders.
         safe_node_name = re.sub(r"[^A-Za-z0-9_]+", "_", node_name).strip("_") or "compositor_output"
@@ -284,7 +284,7 @@ def _remap_file_output_nodes(
         if is_multilayer:
             # En EXR multilayer, el marcador de frame va en file_name (que
             # es la unica propiedad que determina el nombre fisico del
-            # archivo). item.name son capas internas y no se tocan.
+            # file). item.name values are internal layers and are not modified.
             node.file_name = f"{safe_node_name}_######"
             print(
                 f"[driver] Nodo '{node_name}' es EXR multilayer, "
@@ -293,7 +293,7 @@ def _remap_file_output_nodes(
             )
         else:
             # En nodos single-layer, cada item es un archivo separado.
-            # file_name debe quedar vacio para no duplicar marcador.
+            # file_name must remain empty to avoid duplicating the frame marker.
             node.file_name = ""
             for item in node.file_output_items:
                 item_name_clean = item.name.rstrip("_")
@@ -314,7 +314,7 @@ def _remap_file_output_nodes(
         )
 
     if remapped == 0:
-        # Restaurar la salida directa del render como fallback
+        # Restore direct render output as a fallback
         scene.render.filepath = original_filepath
         print(
             "[driver] ERROR: No File Output nodes were found in the compositor. "
