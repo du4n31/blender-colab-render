@@ -92,7 +92,7 @@ class RenderOrchestrator:
         self._uploaded_paths: set[str] = set()
 
     # ------------------------------------------------------------------
-    # Construccion del comando
+    # Command construction
     # ------------------------------------------------------------------
 
     def build_command(self) -> list[str]:
@@ -399,7 +399,7 @@ class RenderOrchestrator:
             local_path: Local path to the rendered file.
             frame_num: Frame number.
             subdir: Drive subdirectory used to organize multiple
-                salidas (ej: nombre del nodo File Output).
+                outputs (e.g. a File Output node name).
         """
         try:
             self._dispatch_upload(local_path, frame_num, subdir)
