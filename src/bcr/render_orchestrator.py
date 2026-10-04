@@ -318,7 +318,7 @@ class RenderOrchestrator:
         and files from compositor nodes that were not remapped correctly.
         """
         try:
-            path.relative_to(self.output_dir)
+            path.resolve().relative_to(self.output_dir.resolve())
             return True
         except ValueError:
             return False
