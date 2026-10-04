@@ -40,7 +40,7 @@ def get_blender_path(
                    If omitted, the archive is downloaded directly.
 
     Returns:
-        Path al ejecutable de Blender.
+        Path to the Blender executable.
 
     Raises:
         BlenderProvisioningError: if download/extraction fails or the binary is missing.
@@ -202,9 +202,9 @@ def fetch_available_versions(min_major: int = 5) -> list[str]:
 def resolve_blender_version(preferred: Optional[str] = None) -> str:
     """Resolve the Blender version to use.
 
-    Si se provee ``preferred``, lo intenta primero (puede venir del selector
+    If ``preferred`` is provided, try it first (it may come from the
     notebook UI). If the live query fails, return the
-    preferida o la default con una advertencia.
+    preferred version selector); otherwise use the default with a warning.
 
     Returns:
         Semantic version (e.g. "5.2.0").
