@@ -1,6 +1,6 @@
-"""Pruebas para local_export.py.
+"""Tests for local_export.py.
 
-Validan empaquetado en .zip, descarga local y verificacion de espacio en disco.
+Validate ZIP packaging, local download, and disk-space checks.
 """
 
 import shutil
@@ -20,7 +20,7 @@ from bcr.local_export import (
 
 
 class TestPackageOutput(unittest.TestCase):
-    """Prueba la funcion package_output."""
+    """Test package_output."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -71,7 +71,7 @@ class TestPackageOutput(unittest.TestCase):
 
 
 class TestTriggerDownload(unittest.TestCase):
-    """Prueba la funcion trigger_download."""
+    """Test trigger_download."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -105,7 +105,7 @@ class TestTriggerDownload(unittest.TestCase):
 
 
 class TestCheckDiskSpace(unittest.TestCase):
-    """Prueba la funcion check_disk_space."""
+    """Test check_disk_space."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
