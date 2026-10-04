@@ -149,7 +149,7 @@ class TestAcquireSourceDrivePath(unittest.TestCase):
                 acquire_source(
                     "drive_path", str(nonexistent), self._tmpdir
                 )
-            self.assertIn("no existe", str(ctx.exception))
+            self.assertIn("does not exist", str(ctx.exception))
 
 
 class TestAcquireSourceUpload(unittest.TestCase):
