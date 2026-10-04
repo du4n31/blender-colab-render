@@ -48,28 +48,25 @@ class RenderState:
 
 
 def _state_path(drive_path: Path) -> Path:
-    """Ruta completa al state file dentro de Drive."""
+    """Return the full path to the state file inside Drive."""
     return drive_path / STATE_DIR_NAME / STATE_FILE_NAME
 
 
 def save_state(
     drive_path: Path, last_frame: int, total_frames: int, backend=None
 ) -> RenderState:
-    """Guarda el estado del render en Drive.
-
-    Crea el directorio de estado si no existe.
+    """Save render state to Drive, creating the state directory if needed.
 
     Args:
-        drive_path: Ruta base de salida en Drive (o, si se pasa backend,
-            el folder_id de esa carpeta -- ver drive_backend.py).
-        last_frame: Ultimo frame completado.
-        total_frames: Total de frames del trabajo.
-        backend: Backend opcional (ej. ServiceAccountDriveBackend) para
-            guardar el estado via API en vez del filesystem montado.
-            Por defecto None -- comportamiento identico al actual.
+        drive_path: Drive output path, or the output folder ID when a backend
+            is supplied (see drive_backend.py).
+        last_frame: Last completed frame.
+        total_frames: Total number of frames in the job.
+        backend: Optional backend such as ServiceAccountDriveBackend for API
+            persistence instead of the mounted filesystem.
 
     Returns:
-        El objeto RenderState guardado.
+        The saved RenderState object.
     """
     if backend is not None:
         return backend.save_state(drive_path, last_frame, total_frames)
@@ -88,19 +85,16 @@ def save_state(
 
 
 def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
-    """Carga el ultimo frame confirmado desde el state file.
+    """Load the last confirmed frame from the state file.
 
     Args:
-        drive_path: Ruta base de salida en Drive (o folder_id si se pasa
-            backend).
-        total_frames: Total de frames esperado para este trabajo.
-        backend: Backend opcional para leer el estado via API. Por
-            defecto None -- comportamiento identico al actual.
+        drive_path: Drive output path, or folder ID when a backend is supplied.
+        total_frames: Expected number of frames for this job.
+        backend: Optional backend for reading state through the Drive API.
 
     Returns:
-        El ultimo frame completado (0 si no hay estado previo).
-        Si total_frames cambio (nuevo trabajo con distinta duracion),
-        se ignora el estado previo.
+        The last completed frame (0 when no prior state exists). A checkpoint
+        from a job with a different frame count is ignored.
     """
     if backend is not None:
         return backend.load_state(drive_path, total_frames)
@@ -115,7 +109,7 @@ def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
             data = json.load(f)
         state = RenderState.from_dict(data)
 
-        # Si el total de frames cambio, el estado previo no es valido
+        # Ignore checkpoints from jobs with a different frame count.
         if state.total_frames != total_frames:
             return 0
 
@@ -125,7 +119,12 @@ def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
 
 
 def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None, frame_start: int = 1) -> int:
-    """Return the last contiguous frame confirmed by both state and stored files."""
+    """Return the last contiguous frame confirmed by stored image files.
+
+    state_last_frame is retained for API compatibility, but the files are
+    authoritative because checkpoints can be stale or ahead of durable output.
+    The sentinel frame_start - 1 means no contiguous frame is present.
+    """
     if backend is not None:
         frames_on_disk = backend.list_frame_numbers(drive_path)
     else:
@@ -133,7 +132,7 @@ def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None, 
 
     ordered = sorted(set(frames_on_disk))
     if not ordered:
-        return 0
+        return frame_start - 1
 
     # Never skip a missing frame after a partially completed parallel upload.
     contiguous_last = frame_start - 1
@@ -144,7 +143,7 @@ def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None, 
             break
         contiguous_last = frame_number
     # Actual image files are authoritative; a missing or stale checkpoint must not disable resume.
-    return max(0, contiguous_last)
+    return contiguous_last
 
 def _list_frame_numbers(drive_path: Path) -> list[int]:
     """Find frame numbers in rendered images, including compositor subfolders."""
