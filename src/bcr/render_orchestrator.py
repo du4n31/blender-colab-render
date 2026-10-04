@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from bcr.config import BACKLOG_LIMIT, RENDER_OUTPUT_PATTERN, extract_frame_number
+from bcr.config import BACKLOG_LIMIT, RENDERED_IMAGE_EXTENSIONS, RENDER_OUTPUT_PATTERN, extract_frame_number
 from bcr.drive_backend import DriveBackendError
 from bcr.drive_sync import DriveSyncError, remove_local, upload_frame
 from bcr.local_export import LocalExportError, check_disk_space, package_output, trigger_download
@@ -215,6 +215,8 @@ class RenderOrchestrator:
                     # si los File Output nodes no fueron remapeados).
                     if not self._is_valid_output_path(local_path):
                         continue
+                    if local_path.suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                        continue
 
                     # Skip this path if it has already been processed
                     path_key = str(local_path)
@@ -358,8 +360,10 @@ class RenderOrchestrator:
         for f in self.output_dir.rglob("*"):
             if not f.is_file():
                 continue
+            if f.suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                continue
             name = f.name
-            # Ignorar descartables
+            # Ignore disposable files
             if name.startswith("_discard") or name.startswith("_render_result"):
                 continue
             nf = extract_frame_number(name)
@@ -508,11 +512,15 @@ class RenderOrchestrator:
             for f in sorted(self.output_dir.rglob("*")):
                 if not f.is_file():
                     continue
-                # Saltar descartables
+                if f.suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                    continue
+                # Skip disposable files
                 if f.name.startswith("_discard") or f.name.startswith("_render_result"):
                     continue
                 frame_num = extract_frame_number(f.name)
                 if frame_num is None:
+                    continue
+                if not self._requested_frame_start <= frame_num <= self._requested_frame_end:
                     continue
                 try:
                     subdir = self._compute_subdir(f)
