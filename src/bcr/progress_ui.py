@@ -1,6 +1,6 @@
 """Live progress interface using ipywidgets in Google Colab.
 
-Sin emojis, etiquetas en espanol, informacion clara de un vistazo.
+No emojis; clear labels and at-a-glance information.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -110,7 +110,7 @@ class RenderProgressUI:
         self._label_upload.value = f"Upload queue: {upload_queue_size} frames"
 
     def show_warning(self, message: str) -> None:
-        """Muestra una advertencia no bloqueante."""
+        """Display a non-blocking warning."""
         if not self._widgets_created:
             return
         self._label_warning.value = (
@@ -128,7 +128,7 @@ class RenderProgressUI:
         self._label_warning.layout.display = ""  # type: ignore[union-attr]
 
     def show_completion(self) -> None:
-        """Muestra resumen de finalizacion."""
+        """Display the completion summary."""
         if not self._widgets_created:
             return
         self._progress_bar.bar_style = "success"  # type: ignore[union-attr]
