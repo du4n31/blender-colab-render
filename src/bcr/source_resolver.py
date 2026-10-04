@@ -78,10 +78,10 @@ def _acquire_from_link(url: str, working_dir: Path) -> Path:
 
 
 def _acquire_from_upload(working_dir: Path) -> Path:
-    """Sube un archivo via ``google.colab.files.upload()``.
+    """Upload a file through ``google.colab.files.upload()``.
 
     NOTE: This function is **blocking** and requires the user to select
-    un archivo en el navegador de Colab. Solo funciona en Google Colab.
+    a file through the Colab browser. Only works in Google Colab.
     """
     try:
         from google.colab import files  # type: ignore[import-untyped]
@@ -148,7 +148,7 @@ def resolve_zip_contents(
     working_dir: Path,
     kind: str,
 ) -> Union[Path, list[Path]]:
-    """Extrae y resuelve el contenido de un archivo ZIP segun el tipo solicitado.
+    """Extract and resolve ZIP contents according to the requested type.
 
     Si ``local_path`` no tiene extension ``.zip`` se devuelve tal cual
     (como Path para ``kind="blend"`` o ``[Path]`` para ``kind="script"``).
@@ -156,11 +156,11 @@ def resolve_zip_contents(
     Args:
         local_path: Path to the file (may be a .zip archive or another type).
         working_dir: Directory where the ZIP will be extracted.
-        kind: ``"blend"`` para buscar archivos .blend,
-              ``"script"`` para buscar entry point .py.
+        kind: ``"blend"`` to find .blend files,
+              ``"script"`` to find the .py entry point.
 
     Returns:
-        Para ``"blend"``: Path al unico archivo .blend encontrado.
+        For ``"blend"``: path to the only .blend file found.
         Para ``"script"``: ``[entry_point_path, extracted_dir_path]``.
 
     Raises:
