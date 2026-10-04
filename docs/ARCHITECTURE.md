@@ -36,6 +36,8 @@ Blender Colab Render orchestrates Blender in Google Colab and transfers rendered
 - `drive_backend.py` and `drive_sync.py`: storage operations for API-backed and mounted Drive modes.
 - `local_export.py`: local output packaging and download support.
 - `progress_ui.py`: optional notebook progress display.
+
+The notebook separates temporary inputs and helper scripts under `/content/render_tmp` from rendered images under `/content/render_output`. ZIP export packages only the render-output directory, not the original scene or custom-script staging directory.
 - `blender_scripts/render_frame_driver.py`: configure Blender-side rendering and output paths.
 
 ## Resume contract
