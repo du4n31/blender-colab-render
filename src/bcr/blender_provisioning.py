@@ -1,7 +1,7 @@
 """Aprovisionamiento del binario portable de Blender.
 
-Descarga el .tar.xz desde download.blender.org y lo extrae.
-Soporta cache en Drive para no re-descargar en cada sesion de Colab.
+Download and extract the .tar.xz archive from download.blender.org.
+Supports a Drive cache to avoid downloading Blender in every Colab session.
 """
 
 import os
@@ -25,25 +25,25 @@ from bcr.config import (
 
 
 class BlenderProvisioningError(Exception):
-    """Error al aprovisionar Blender."""
+    """Error raised while provisioning Blender."""
 
 
 def get_blender_path(
     version: str = BLENDER_DEFAULT_VERSION,
     cache_dir: Optional[Path] = None,
 ) -> Path:
-    """Descarga (o copia desde cache) y extrae Blender, devuelve ruta al binario.
+    """Download (or copy from cache), extract Blender, and return its binary path.
 
     Args:
         version: Version semantica de Blender (ej. "5.2.0").
-        cache_dir: Directorio en Drive donde cachear el .tar.xz.
-                   Si no se provee, se descarga directamente.
+        cache_dir: Drive directory used to cache the .tar.xz archive.
+                   If omitted, the archive is downloaded directly.
 
     Returns:
         Path al ejecutable de Blender.
 
     Raises:
-        BlenderProvisioningError: si falla la descarga, extraccion o el binario no existe.
+        BlenderProvisioningError: if download/extraction fails or the binary is missing.
     """
     download_url = build_blender_download_url(version)
     archive_name = f"blender-{version}-linux-x64.tar.xz"
@@ -52,20 +52,20 @@ def get_blender_path(
 
     tar_path = tmp_dir / archive_name
 
-    # 1. Obtener el .tar.xz
+    # 1. Get the .tar.xz archive
     if cache_dir is not None:
         cache_path = Path(cache_dir) / archive_name
         if cache_path.exists():
-            print(f"[blender] Copiando Blender desde cache: {cache_path}")
+            print(f"[blender] Copying Blender from cache: {cache_path}")
             shutil.copy2(str(cache_path), str(tar_path))
         else:
-            print(f"[blender] Descargando Blender desde {download_url}")
+            print(f"[blender] Downloading Blender from {download_url}")
             _download_file(download_url, tar_path)
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(str(tar_path), str(cache_path))
             print(f"[blender] Cacheado en: {cache_path}")
     else:
-        print(f"[blender] Descargando Blender desde {download_url}")
+        print(f"[blender] Downloading Blender from {download_url}")
         _download_file(download_url, tar_path)
 
     # 2. Extraer
@@ -81,7 +81,7 @@ def get_blender_path(
     # 3. Localizar binario
     blender_bin = _find_blender_binary(extract_dir)
     if not blender_bin:
-        msg = f"No se encontro el binario de Blender en {extract_dir}"
+        msg = f"Blender binary was not found in {extract_dir}"
         raise BlenderProvisioningError(msg)
 
     os.chmod(str(blender_bin), 0o755)
@@ -90,12 +90,12 @@ def get_blender_path(
 
 
 def _download_file(url: str, dest: Path) -> None:
-    """Descarga un archivo con soporte para archivos grandes."""
+    """Download a file with support for large files."""
     try:
         resp = requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT_SECONDS)
         resp.raise_for_status()
     except requests.RequestException as exc:
-        msg = f"Error al descargar {url}: {exc}"
+        msg = f"Failed to download {url}: {exc}"
         raise BlenderProvisioningError(msg) from exc
 
     with open(dest, "wb") as f:
@@ -104,13 +104,13 @@ def _download_file(url: str, dest: Path) -> None:
                 f.write(chunk)
 
     if not dest.exists() or dest.stat().st_size == 0:
-        msg = f"Archivo descargado vacio o no existe: {dest}"
+        msg = f"Downloaded file is empty or does not exist: {dest}"
         raise BlenderProvisioningError(msg)
 
 
 def _find_blender_binary(extract_dir: Path) -> Optional[Path]:
-    """Busca el binario 'blender' dentro del directorio extraido."""
-    # Buscar por la ruta relativa conocida
+    """Find the Blender binary inside the extracted directory."""
+    # Check the known relative path first
     candidate = extract_dir / BLENDER_BINARY_RELATIVE
     if candidate.exists():
         return candidate
@@ -127,10 +127,10 @@ def _find_blender_binary(extract_dir: Path) -> Optional[Path]:
 
 
 def verify_blender_version(blender_path: Path) -> str:
-    """Ejecuta 'blender --version' y devuelve la salida.
+    """Run 'blender --version' and return its output.
 
     Raises:
-        BlenderProvisioningError: si no se puede ejecutar.
+        BlenderProvisioningError: if Blender cannot be executed.
     """
     try:
         result = subprocess.run(
@@ -141,30 +141,30 @@ def verify_blender_version(blender_path: Path) -> str:
         )
         return result.stdout.strip()
     except (subprocess.SubprocessError, OSError) as exc:
-        msg = f"Error al verificar version de Blender: {exc}"
+        msg = f"Failed to check Blender version: {exc}"
         raise BlenderProvisioningError(msg) from exc
 
 
 def fetch_available_versions(min_major: int = 5) -> list[str]:
-    """Obtiene la lista de versiones de Blender disponibles >= min_major.
+    """Fetch available Blender versions >= min_major.
 
     Hace GET a BLENDER_RELEASE_BASE, parsea el HTML autoindex en busca de
-    carpetas con patron ``BlenderX.Y/``, filtra major >= min_major,
-    y para cada carpeta busca el .tar.xz de Linux x64 para conocer
+    version folders matching ``BlenderX.Y/``, filter major >= min_major,
+    and inspect each folder for the Linux x64 .tar.xz archive to determine
     el parche exacto.
 
     Returns:
-        Lista de versiones semanticas ordenadas descendente (ej. ["5.3.0", "5.2.0", ...]).
+        Semantic versions sorted in descending order (ej. ["5.3.0", "5.2.0", ...]).
 
     Raises:
-        BlenderProvisioningError: si falla la conexion y no se pudo obtener nada.
+        BlenderProvisioningError: if the connection fails and no versions are found.
     """
     try:
         resp = requests.get(BLENDER_RELEASE_BASE, timeout=30)
         resp.raise_for_status()
     except requests.RequestException as exc:
         raise BlenderProvisioningError(
-            f"No se pudo obtener el listado de versiones: {exc}"
+            f"Could not retrieve the version list: {exc}"
         ) from exc
 
     versions: list[str] = []
@@ -190,7 +190,7 @@ def fetch_available_versions(min_major: int = 5) -> list[str]:
 
     if not versions:
         raise BlenderProvisioningError(
-            "No se encontraron versiones de Blender disponibles"
+            "No available Blender versions were found"
         )
 
     versions.sort(
@@ -213,8 +213,8 @@ def resolve_blender_version(preferred: Optional[str] = None) -> str:
         available = fetch_available_versions()
     except BlenderProvisioningError:
         print(
-            "[blender] WARNING: No se pudo obtener lista de versiones en "
-            f"vivo, usando version por defecto"
+            "[blender] WARNING: Could not fetch Blender versions live from "
+            f"live; using the default version"
         )
         return preferred or BLENDER_DEFAULT_VERSION
 
