@@ -628,3 +628,70 @@ class TestDriveBackendDispatch(unittest.TestCase):
 
         # como fallo la subida, el archivo local NO se borra
         self.assertTrue(local_file.exists())
+
+
+class TestResumeOrchestration(unittest.TestCase):
+    """Exercise resume decisions without launching a real Blender process."""
+
+    def _orchestrator(self, frame_start: int, frame_end: int) -> RenderOrchestrator:
+        return RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/scene.blend"),
+            output_dir=Path("/tmp/bcr-resume-test-output"),
+            drive_output_dir=Path("/drive/output"),
+            blender_scripts_dir=Path("/scripts"),
+            frame_start=frame_start,
+            frame_end=frame_end,
+            output_target="drive",
+        )
+
+    @patch("bcr.render_orchestrator.reconcile_with_files")
+    @patch("bcr.render_orchestrator.load_state", return_value=0)
+    @patch("bcr.render_orchestrator.subprocess.Popen")
+    def test_empty_range_starting_at_zero_does_not_skip_frame_zero(
+        self, mock_popen, _mock_load_state, mock_reconcile
+    ):
+        mock_reconcile.return_value = -1
+        process = MagicMock()
+        process.stdout = []
+        process.poll.return_value = 0
+        mock_popen.return_value = process
+
+        orch = self._orchestrator(0, 0)
+        orch.run()
+
+        mock_popen.assert_called_once()
+        command = mock_popen.call_args.args[0]
+        self.assertIn("--render-frame", command)
+        self.assertIn("0", command)
+
+    @patch("bcr.render_orchestrator.reconcile_with_files")
+    @patch("bcr.render_orchestrator.load_state", return_value=11)
+    @patch("bcr.render_orchestrator.subprocess.Popen")
+    def test_resume_starts_at_first_missing_frame_and_preserves_range(
+        self, mock_popen, _mock_load_state, mock_reconcile
+    ):
+        mock_reconcile.return_value = 11
+        process = MagicMock()
+        process.stdout = []
+        process.poll.return_value = 0
+        mock_popen.return_value = process
+
+        orch = self._orchestrator(10, 15)
+        orch.run()
+
+        command = mock_popen.call_args.args[0]
+        self.assertEqual(command[command.index("--frame-start") + 1], "12")
+        self.assertEqual(command[command.index("--frame-end") + 1], "15")
+        self.assertEqual(orch._requested_frame_start, 10)
+        self.assertEqual(orch._requested_total_frames, 6)
+
+    @patch("bcr.render_orchestrator.reconcile_with_files", return_value=5)
+    @patch("bcr.render_orchestrator.load_state", return_value=5)
+    @patch("bcr.render_orchestrator.subprocess.Popen")
+    def test_complete_range_does_not_launch_blender(
+        self, mock_popen, _mock_load_state, _mock_reconcile
+    ):
+        orch = self._orchestrator(1, 5)
+        orch.run()
+        mock_popen.assert_not_called()
