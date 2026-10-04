@@ -51,7 +51,7 @@ def upload_frame(
 ) -> Path:
     """Copy a rendered frame from the runtime to Drive.
 
-    Si preserve_name=True (default), usa el nombre original del archivo
+    If preserve_name=True (default), preserve the original filename
     para evitar colisiones cuando hay multiples salidas por frame.
     If preserve_name=False, use the frame_%06d.ext pattern for compatibility.
 
@@ -60,19 +60,19 @@ def upload_frame(
         drive_output_dir: Drive output directory.
         frame_num: Numero de frame (para naming fallback).
         subdir: Subdirectorio opcional (ej: nombre del nodo).
-        preserve_name: Si True, preserva el nombre original del archivo.
+        preserve_name: If True, preserve the original filename.
 
     Returns:
-        Path al archivo en Drive.
+        Path to the file in Drive.
 
     Raises:
-        DriveSyncError: si el archivo local no existe o falla la copia.
+        DriveSyncError: if the local file does not exist or copying fails.
     """
     local_path = Path(local_path)
     drive_output_dir = Path(drive_output_dir)
 
     if not local_path.exists():
-        msg = f"El archivo local no existe: {local_path}"
+        msg = f"Local file does not exist: {local_path}"
         raise DriveSyncError(msg)
 
     # Determinar nombre de destino
@@ -122,7 +122,7 @@ def remove_local(local_path: Path) -> None:
 def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
     """Lista los numeros de frame subidos a Drive.
 
-    Busca recursivamente en subdirectorios archivos cuyo nombre contenga
+    Recursively search subdirectories for files whose names contain
     exactly six consecutive digits (the frame number). It does not assume
     un prefijo especifico como "frame_".
 
@@ -130,7 +130,7 @@ def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
         drive_output_dir: Drive output directory.
 
     Returns:
-        Lista ordenada de numeros de frame ya subidos (sin duplicados).
+        Sorted list of uploaded frame numbers (without duplicates).
     """
     drive_output_dir = Path(drive_output_dir)
     if not drive_output_dir.exists():
