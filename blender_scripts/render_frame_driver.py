@@ -50,10 +50,15 @@ def main() -> None:
     # 1. Configurar dispositivo
     _configure_device(device)
 
-    # 2. Configurar modo de salida (compositor vs sequencer)
+    # 2. Configure output mode and force the direct render path into the managed directory.
     _configure_output_mode(output_mode)
+    if output_mode == "sequencer":
+        bpy.context.scene.render.filepath = str(Path(output_dir) / "frame_######")
 
-    # 3. Remapear nodos File Output a una ruta Linux valida
+    # 3. Audit movie media before rendering so missing paths/codecs are visible in logs.
+    _audit_video_media()
+
+    # 4. Remap compositor File Output nodes into clean, managed output folders.
     _remap_file_output_nodes(output_dir, output_mode)
 
     print(f"[driver] Dispositivo: {device}")
@@ -88,6 +93,42 @@ def _parse_custom_args(argv: list[str]) -> dict[str, str]:
         i += 1
 
     return result
+
+
+def _audit_video_media() -> None:
+    """Report video-media support, packing status, and unresolved paths."""
+    import bpy
+
+    ffmpeg_available = bool(getattr(bpy.app.build_options, "ffmpeg", False))
+    print(f"[media] Blender FFmpeg support: {ffmpeg_available}")
+    if not ffmpeg_available:
+        print("[media] WARNING: this Blender build has no FFmpeg support; video textures may fail.", file=sys.stderr)
+
+    checked = 0
+    for image in bpy.data.images:
+        if getattr(image, "source", "") != "MOVIE":
+            continue
+        checked += 1
+        packed = getattr(image, "packed_file", None) is not None
+        resolved = bpy.path.abspath(image.filepath, library=image.library)
+        exists = Path(resolved).is_file()
+        status = "packed" if packed else ("available on disk" if exists else "MISSING")
+        print(f"[media] Movie image {image.name!r}: {status}; path={resolved}")
+        if not packed and not exists:
+            print("[media] WARNING: movie media is not packed and its resolved path does not exist in this runtime.", file=sys.stderr)
+
+    for clip in bpy.data.movieclips:
+        checked += 1
+        resolved = bpy.path.abspath(clip.filepath, library=clip.library)
+        exists = Path(resolved).is_file()
+        packed = getattr(clip, "packed_file", None) is not None
+        status = "packed" if packed else ("available on disk" if exists else "MISSING")
+        print(f"[media] Movie clip {clip.name!r}: {status}; path={resolved}")
+        if not packed and not exists:
+            print("[media] WARNING: movie clip is not packed and its resolved path does not exist in this runtime.", file=sys.stderr)
+
+    if checked == 0:
+        print("[media] No movie textures or movie clips found.")
 
 
 def _configure_device(backend: str) -> None:
