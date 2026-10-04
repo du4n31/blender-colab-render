@@ -344,8 +344,7 @@ def _remap_file_output_nodes(
         )
         if warn_no_slots:
             print(
-                f"[driver] WARNING: {warn_no_slots} node(s) 
-                "have no file_output_items"
+                f"[driver] WARNING: {warn_no_slots} node(s) have no file_output_items"
             )
 
 
