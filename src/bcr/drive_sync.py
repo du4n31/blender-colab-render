@@ -59,7 +59,7 @@ def upload_frame(
         local_path: Local path to the rendered frame.
         drive_output_dir: Drive output directory.
         frame_num: Frame number (used for fallback naming).
-        subdir: Subdirectorio opcional (ej: nombre del nodo).
+        subdir: Optional subdirectory (e.g. node name).
         preserve_name: If True, preserve the original filename.
 
     Returns:
