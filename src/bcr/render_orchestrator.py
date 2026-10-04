@@ -251,7 +251,7 @@ class RenderOrchestrator:
                     if self.output_target == "drive":
                         self._wait_if_backlogged()
 
-            # Esperar a que terminen todas las subidas (modo drive)
+            # Wait for all uploads to finish (Drive mode)
             for future in as_completed(self._upload_futures):
                 try:
                     future.result()
@@ -431,7 +431,7 @@ class RenderOrchestrator:
     # ------------------------------------------------------------------
 
     def _update_metrics(self) -> None:
-        """Actualiza metricas de tiempo y notifica al callback."""
+        """Update timing metrics and notify the callback."""
         if len(self._frame_times) < 2:
             return
 
@@ -505,7 +505,7 @@ class RenderOrchestrator:
 
         print("[orchestrator] Reconciling pending frames...", file=sys.stderr)
 
-        # Subir frames locales que no se hayan subido
+        # Upload any local frames that have not yet been uploaded
         # Use rglob to find files in subdirectories (File Output
         # nodes remapeados pueden crear subdirectorios en output_dir).
         if self.output_dir.exists():
