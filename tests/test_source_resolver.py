@@ -242,6 +242,19 @@ class TestResolveZipContents(unittest.TestCase):
         self.assertEqual(result[1], expected_dir)
         self.assertTrue(expected_entry.exists())
 
+    def test_script_entry_point_cannot_escape_extraction_directory(self) -> None:
+        """Reject entry_point.txt paths that point outside the extracted ZIP."""
+        zip_path = self._tmpdir / "unsafe_script.zip"
+        outside_script = self._tmpdir / "outside.py"
+        outside_script.write_text("print('should not run')", encoding="utf-8")
+        with zipfile.ZipFile(str(zip_path), "w") as zf:
+            zf.writestr("entry_point.txt", "../outside.py")
+            zf.writestr("helper.py", "def helper(): pass")
+
+        with self.assertRaises(SourceAcquisitionError) as ctx:
+            resolve_zip_contents(zip_path, self._tmpdir, "script")
+        self.assertIn("outside the extraction directory", str(ctx.exception))
+
     def test_script_zip_single_py_without_entry_point(self) -> None:
         """A script ZIP without entry_point.txt and one .py returns [py, dir]."""
         zip_path = self._tmpdir / "simple_script.zip"
