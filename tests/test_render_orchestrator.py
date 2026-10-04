@@ -1,9 +1,9 @@
-"""Pruebas para render_orchestrator.py.
+"""Tests for render_orchestrator.py.
 
-Estas pruebas validan la logica que NO depende de una GPU real:
-- Construccion del comando de Blender
-- Parseo de stdout (Saved: lineas)
-- Calculo de metricas
+These tests validate logic that does NOT depend on a real GPU:
+- Blender command construction
+- stdout parsing (Saved: lines)
+- Metric calculations
 """
 
 import re
@@ -18,7 +18,7 @@ from bcr.render_orchestrator import RenderOrchestrator
 
 
 class TestBuildCommand:
-    """Prueba la construccion del comando de Blender."""
+    """Test Blender command construction."""
 
     def test_basic_command_structure(self):
         """El comando incluye los argumentos minimos necesarios."""
@@ -40,7 +40,7 @@ class TestBuildCommand:
         assert "CYCLES" in cmd
 
     def test_render_anim_vs_render_frame(self):
-        """Rango de frames usa --render-anim, frame unico usa --render-frame."""
+        """A frame range uses --render-anim; a single frame uses --render-frame."""
         # Rango
         orch_anim = RenderOrchestrator(
             blender_path=Path("/blender"),
@@ -71,10 +71,10 @@ class TestBuildCommand:
         assert "42" in cmd_single
 
     def test_argument_order_correct(self):
-        """Verifica el orden critical de argumentos.
+        """Verify the critical argument order.
 
-        El .blend debe ir ANTES de --render-output y --render-anim
-        debe ir AL FINAL (antes de --).
+        The .blend file must appear BEFORE --render-output and --render-anim
+        must appear LAST (before --).
         """
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
@@ -87,7 +87,7 @@ class TestBuildCommand:
         )
         cmd = orch.build_command()
 
-        # Encontrar indices
+        # Find argument indices
         idx_background = cmd.index("--background")
         idx_blend = cmd.index("/scene.blend")
         idx_render_output = cmd.index("--render-output")
@@ -95,21 +95,21 @@ class TestBuildCommand:
         idx_ddash = cmd.index("--")
         idx_device = cmd.index("--cycles-device") if "--cycles-device" in cmd else -1
 
-        # El .blend debe ir despues de --background
+        # The .blend file must follow --background
         assert idx_blend > idx_background
 
-        # --render-output debe ir DESPUES de .blend
+        # --render-output must follow the .blend file
         assert idx_render_output > idx_blend
 
-        # --render-anim debe ir DESPUES de --render-output y ANTES de --
+        # --render-anim must follow --render-output and precede --
         if idx_render_anim >= 0:
             assert idx_render_anim > idx_render_output
             assert idx_ddash == -1 or idx_render_anim < idx_ddash or idx_ddash < 0
 
-        # -- debe ser uno de los ultimos
+        # -- must be one of the final arguments
         assert idx_ddash > idx_render_output
 
-        # --cycles-device debe ir DESPUES de --
+        # --cycles-device must follow --
         assert idx_device > idx_ddash
 
     def test_custom_scripts_included(self):
@@ -195,10 +195,10 @@ class TestBuildCommand:
 
 
 class TestParseSavedLine:
-    """Prueba el parseo de lineas 'Saved:' del stdout de Blender.
+    """Test parsing Blender stdout 'Saved:' lines.
 
     Ahora _parse_saved_line devuelve tuple (frame_num, Path) con la
-    ruta exacta que Blender reporta, para poder soportar multiples
+    the exact path reported by Blender, to support multiple
     archivos por frame (varios File Output nodes).
     """
 
@@ -236,7 +236,7 @@ class TestParseSavedLine:
         assert str(path) == "/tmp/blender_XXXXXX/frame_000001.png"
 
     def test_saved_blender_stdout_pattern(self):
-        """Patron real de stdout de Blender."""
+        """Actual Blender stdout pattern."""
         lines = [
             "Fra:1 Mem:42.35M ( Peak: 45.12M ) | Time: 00:00.53",
             "Saved: '/content/render_tmp/frame_000001.png'",
@@ -351,7 +351,7 @@ class TestParseSavedLine:
 
 
 class TestValidateOutputPath:
-    """Prueba _is_valid_output_path: filtrado de rutas no-Colab."""
+    """Test _is_valid_output_path: filter paths outside Colab."""
 
     def make_orch(self, tmp_output_dir: Path) -> RenderOrchestrator:
         return RenderOrchestrator(
@@ -365,13 +365,13 @@ class TestValidateOutputPath:
         )
 
     def test_accepts_path_under_output_dir(self, tmp_output_dir: Path):
-        """Ruta bajo output_dir es valida."""
+        """A path under output_dir is valid."""
         orch = self.make_orch(tmp_output_dir)
         valid_path = tmp_output_dir / "Temp" / "beauty_0001.exr"
         assert orch._is_valid_output_path(valid_path)
 
     def test_accepts_path_direct_in_output_dir(self, tmp_output_dir: Path):
-        """Ruta directamente en output_dir es valida."""
+        """A path directly in output_dir is valid."""
         orch = self.make_orch(tmp_output_dir)
         valid_path = tmp_output_dir / "frame_00001.png"
         assert orch._is_valid_output_path(valid_path)
@@ -383,26 +383,26 @@ class TestValidateOutputPath:
         assert not orch._is_valid_output_path(bad_path)
 
     def test_rejects_windows_path(self, tmp_output_dir: Path):
-        """Ruta Windows C:\\... es rechazada."""
+        """A Windows path C:\\... is rejected."""
         orch = self.make_orch(tmp_output_dir)
         bad_path = Path("C:\\Users\\artista\\Documents\\file_name1frane.exr")
         assert not orch._is_valid_output_path(bad_path)
 
     def test_rejects_unrelated_path(self, tmp_output_dir: Path):
-        """Ruta fuera de output_dir es rechazada."""
+        """A path outside output_dir is rejected."""
         orch = self.make_orch(tmp_output_dir)
         bad_path = Path("/tmp/unrelated/file.exr")
         assert not orch._is_valid_output_path(bad_path)
 
     def test_rejects_root_path(self, tmp_output_dir: Path):
-        """Ruta absoluta fuera de todo es rechazada."""
+        """An absolute path outside managed output is rejected."""
         orch = self.make_orch(tmp_output_dir)
         bad_path = Path("/etc/passwd")
         assert not orch._is_valid_output_path(bad_path)
 
 
 class TestComputeSubdir:
-    """Prueba _compute_subdir: derivar subdirectorio del path."""
+    """Test _compute_subdir: derive the subdirectory from a path."""
 
     def make_orch(self, tmp_output_dir: Path) -> RenderOrchestrator:
         return RenderOrchestrator(
@@ -422,7 +422,7 @@ class TestComputeSubdir:
         assert orch._compute_subdir(path) == "Temp"
 
     def test_file_in_nested_subdirectory(self, tmp_output_dir: Path):
-        """Archivo en subdirectorio anidado -> ruta relativa completa."""
+        """A file in a nested subdirectory yields the complete relative path."""
         orch = self.make_orch(tmp_output_dir)
         path = tmp_output_dir / "Temp" / "beauty" / "beauty_0001.exr"
         assert orch._compute_subdir(path) == "Temp/beauty"
