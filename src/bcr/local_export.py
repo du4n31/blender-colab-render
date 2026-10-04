@@ -1,6 +1,6 @@
-"""Empaquetado en .zip y descarga local para el modo "zip_download".
+"""Local ZIP packaging and download for zip_download mode.
 
-Paralelo a drive_sync.py: en lugar de subir cada frame a Drive
+Like drive_sync.py, but packages frames locally instead of uploading each frame to Drive.
 incrementalmente, los mantiene locales y los empaqueta en un solo .zip.
 """
 
@@ -9,14 +9,14 @@ from pathlib import Path
 
 
 class LocalExportError(Exception):
-    """Error al empaquetar o descargar la salida local."""
+    """Error raised while packaging or downloading local output."""
 
 
 def package_output(output_dir: Path, output_name: str = "render_output") -> Path:
-    """Empaqueta el directorio de salida completo en un archivo .zip.
+    """Package the complete output directory into a .zip archive.
 
     Args:
-        output_dir: Directorio con los frames renderings (puede tener
+        output_dir: Directory containing rendered frames (may include
             subdirectorios por nodo).
         output_name: Nombre base del .zip (default: "render_output").
 
@@ -24,16 +24,16 @@ def package_output(output_dir: Path, output_name: str = "render_output") -> Path
         Path al archivo .zip creado.
 
     Raises:
-        LocalExportError: si el directorio no existe o esta vacio.
+        LocalExportError: if the directory does not exist or is empty.
     """
     output_dir = Path(output_dir)
 
     if not output_dir.exists():
-        msg = f"El directorio de salida no existe: {output_dir}"
+        msg = f"Output directory does not exist: {output_dir}"
         raise LocalExportError(msg)
 
     if not any(output_dir.iterdir()):
-        msg = f"El directorio de salida esta vacio: {output_dir}"
+        msg = f"Output directory is empty: {output_dir}"
         raise LocalExportError(msg)
 
     # Colocar el .zip en /tmp para no ocupar espacio en /content
@@ -47,10 +47,10 @@ def package_output(output_dir: Path, output_name: str = "render_output") -> Path
 
 
 def trigger_download(zip_path: Path) -> None:
-    """Dispara la descarga del .zip en el navegador de Colab.
+    """Trigger the .zip download in the Colab browser.
 
     Args:
-        zip_path: Ruta al archivo .zip a descargar.
+        zip_path: Path to the .zip archive to download.
 
     Raises:
         LocalExportError: si el archivo .zip no existe.
@@ -76,7 +76,7 @@ def check_disk_space(
     """Verifica si hay suficiente espacio libre en disco para render.
 
     Args:
-        output_dir: Directorio donde se escribiran los frames.
+        output_dir: Directory where frames will be written.
         min_free_gb: Espacio libre minimo en GB (default: 2.0).
 
     Returns:
@@ -86,7 +86,7 @@ def check_disk_space(
     output_dir = Path(output_dir)
 
     if not output_dir.exists():
-        return (False, f"El directorio no existe: {output_dir}")
+        return (False, f"Directory does not exist: {output_dir}")
 
     usage = shutil.disk_usage(output_dir)
     free_gb = usage.free / (1024**3)
