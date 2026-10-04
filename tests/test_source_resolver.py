@@ -63,7 +63,7 @@ class TestAcquireSourceLink(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             acquire_source("link", "https://example.com/bad", self._tmpdir)
-        self.assertIn("Error al resolver URL", str(ctx.exception))
+        self.assertIn("Failed to resolve URL", str(ctx.exception))
 
     @patch("bcr.source_resolver.link_resolver.resolve_download_url")
     @patch("bcr.source_resolver.requests.get")
@@ -78,7 +78,7 @@ class TestAcquireSourceLink(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             acquire_source("link", "https://example.com/file.blend", self._tmpdir)
-        self.assertIn("Error al descargar", str(ctx.exception))
+        self.assertIn("Failed to download", str(ctx.exception))
 
 
 class TestAcquireSourceDrivePath(unittest.TestCase):
@@ -137,7 +137,7 @@ class TestAcquireSourceDrivePath(unittest.TestCase):
                 acquire_source(
                     "drive_path", str(outside_file), self._tmpdir
                 )
-            self.assertIn("debe estar dentro de", str(ctx.exception))
+            self.assertIn("Path must be inside", str(ctx.exception))
 
     def test_nonexistent_file_raises(self) -> None:
         """Archivo inexistente dentro de Drive lanza error."""
@@ -175,7 +175,7 @@ class TestAcquireSourceUpload(unittest.TestCase):
             with self.assertRaises(SourceAcquisitionError) as ctx:
                 acquire_source("upload", "", self._tmpdir)
             self.assertIn(
-                "solo esta disponible en Google Colab",
+                "only available in Google Colab",
                 str(ctx.exception),
             )
 
@@ -223,7 +223,7 @@ class TestResolveZipContents(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             resolve_zip_contents(zip_path, self._tmpdir, "blend")
-        self.assertIn("No se encontraron archivos .blend", str(ctx.exception))
+        self.assertIn("No .blend files were found", str(ctx.exception))
 
     def test_script_zip_with_entry_point(self) -> None:
         """ZIP script con entry_point.txt devuelve [entry, dir]."""
@@ -311,5 +311,5 @@ class TestAcquireSourceUnknownMethod(unittest.TestCase):
         with self.assertRaises(SourceAcquisitionError) as ctx:
             acquire_source("invalid", "value", self._tmpdir)
         self.assertIn(
-            "Metodo de adquisicion desconocido", str(ctx.exception)
+            "Unknown acquisition method", str(ctx.exception)
         )
