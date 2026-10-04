@@ -1,4 +1,4 @@
-"""Interfaz de progreso en vivo usando ipywidgets para Google Colab.
+"""Live progress interface using ipywidgets in Google Colab.
 
 Sin emojis, etiquetas en espanol, informacion clara de un vistazo.
 """
@@ -41,10 +41,10 @@ class RenderProgressUI:
         )
 
         self._label_frame = widgets.HTML(value="Frame: -- / --")
-        self._label_time = widgets.HTML(value="Ultimo frame: --")
+        self._label_time = widgets.HTML(value="Last frame: --")
         self._label_avg = widgets.HTML(value="Promedio: --")
         self._label_eta = widgets.HTML(value="Tiempo restante: --")
-        self._label_upload = widgets.HTML(value="Cola de subida: --")
+        self._label_upload = widgets.HTML(value="Upload queue: --")
 
         self._label_warning = widgets.HTML(
             value="",
@@ -79,11 +79,11 @@ class RenderProgressUI:
 
         Args:
             frame: Frame actual.
-            total: Total de frames.
-            last_time: Tiempo del ultimo frame en segundos.
+            total: Total number of frames.
+            last_time: Duration of the last frame in seconds.
             avg_time: Tiempo promedio por frame en segundos.
             eta: Tiempo restante estimado.
-            upload_queue_size: Frames pendientes de subir a Drive.
+            upload_queue_size: Frames waiting to upload to Drive.
         """
         if not self._widgets_created:
             return
@@ -94,7 +94,7 @@ class RenderProgressUI:
         self._label_frame.value = f"Frame: {frame} / {total} ({porcentaje:.1f}%)"
 
         if last_time is not None:
-            self._label_time.value = f"Ultimo frame: {last_time:.1f}s"
+            self._label_time.value = f"Last frame: {last_time:.1f}s"
 
         if avg_time is not None:
             self._label_avg.value = f"Promedio: {avg_time:.1f}s"
@@ -107,7 +107,7 @@ class RenderProgressUI:
                 f"Tiempo restante: {eta_str} (fin estimado: {finish_str})"
             )
 
-        self._label_upload.value = f"Cola de subida: {upload_queue_size} frames"
+        self._label_upload.value = f"Upload queue: {upload_queue_size} frames"
 
     def show_warning(self, message: str) -> None:
         """Muestra una advertencia no bloqueante."""
@@ -119,7 +119,7 @@ class RenderProgressUI:
         self._label_warning.layout.display = ""  # type: ignore[union-attr]
 
     def show_error(self, message: str) -> None:
-        """Muestra un error fatal."""
+        """Display a fatal error."""
         if not self._widgets_created:
             return
         self._label_warning.value = (
@@ -133,7 +133,7 @@ class RenderProgressUI:
             return
         self._progress_bar.bar_style = "success"  # type: ignore[union-attr]
         self._label_warning.value = (
-            '<p style="color: #007700; font-weight: bold;">Render completado.</p>'
+            '<p style="color: #007700; font-weight: bold;">Render completed.</p>'
         )
         self._label_warning.layout.display = ""  # type: ignore[union-attr]
 
