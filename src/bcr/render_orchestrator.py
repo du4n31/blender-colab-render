@@ -66,6 +66,9 @@ class RenderOrchestrator:
         self.blender_scripts_dir = Path(blender_scripts_dir)
         self.frame_start = frame_start
         self.frame_end = frame_end
+        self._requested_frame_start = frame_start
+        self._requested_frame_end = frame_end
+        self._requested_total_frames = frame_end - frame_start + 1
         self.device = device
         self.output_mode = output_mode
         self.output_target = output_target
@@ -401,7 +404,7 @@ class RenderOrchestrator:
             # Actualizar estado en Drive
             self._dispatch_save_state(
                 frame_num,
-                self.frame_end - self.frame_start + 1,
+                self._requested_total_frames,
             )
             self._pending_frames.discard(frame_num)
         except (DriveSyncError, DriveBackendError) as exc:
@@ -447,14 +450,14 @@ class RenderOrchestrator:
 
         # Notificar
         if self.progress_callback:
-            remaining = (self.frame_end - self.frame_start + 1) - self._current_frame
+            remaining = self._requested_frame_end - self._current_frame
             eta = None
             if self._avg_time and self._avg_time > 0:
                 eta = timedelta(seconds=int(self._avg_time * remaining))
 
             self.progress_callback(
-                frame=self._current_frame - self.frame_start + 1,
-                total=self.frame_end - self.frame_start + 1,
+                frame=self._current_frame - self._requested_frame_start + 1,
+                total=self._requested_total_frames,
                 last_time=self._last_time,
                 avg_time=self._avg_time,
                 eta=eta,
