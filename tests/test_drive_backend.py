@@ -1,9 +1,9 @@
-"""Pruebas para drive_backend.py (backend de Drive via API / service account).
+"""Tests for drive_backend.py (Drive API / service-account backend).
 
-Todo se prueba contra un objeto `service` mockeado -- nunca se llama a la
-Drive API real. Cubre resolucion/creacion de carpetas, nombrado de frames
+Everything is tested against a mocked `service` object; the real
+Drive API is never called. Covers folder resolution/creation, frame naming,
 (misma logica que drive_sync.upload_frame), listado recursivo via
-extract_frame_number, guardado/carga de estado, y los errores claros al
+extract_frame_number, state persistence, and clear error handling when
 leer secretos de Colab.
 """
 
@@ -268,7 +268,7 @@ class TestSaveLoadState(unittest.TestCase):
 
         self.assertEqual(state.last_frame, 5)
         self.assertEqual(state.total_frames, 10)
-        # una create() para la carpeta _estado, otra para render_state.json
+        # one create() call for the _estado folder and one for render_state.json
         self.assertEqual(service.files.return_value.create.call_count, 2)
 
     def test_load_state_no_existing_file_returns_zero(self) -> None:
