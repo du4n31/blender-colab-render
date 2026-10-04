@@ -107,7 +107,7 @@ def _resolve_mediafire(url: str) -> str:
     """Extract the actual download URL from MediaFire's HTML page.
 
     Si la URL ya es un enlace directo (subdominio download*.mediafire.com),
-    se devuelve tal cual.
+    it is returned unchanged.
     """
     parsed = urllib.parse.urlparse(url)
     host = parsed.netloc.lower()
@@ -120,7 +120,7 @@ def _resolve_mediafire(url: str) -> str:
         resp = requests.get(url, timeout=30, allow_redirects=True)
         resp.raise_for_status()
     except requests.RequestException as exc:
-        msg = f"Failed to download pagina de MediaFire: {exc}"
+        msg = f"Failed to download the MediaFire page: {exc}"
         raise LinkResolutionError(msg) from exc
 
     html = resp.text
