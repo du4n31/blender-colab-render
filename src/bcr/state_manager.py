@@ -1,7 +1,7 @@
-"""Management del state file para reanudacion de renders interrupted.
+"""Manage render checkpoints for resuming interrupted jobs.
 
-El state file se guarda en Drive (no en disco local) para que sobreviva
-entre sesiones de Colab.
+The state file is stored in Drive (not on local disk) so it persists
+between Colab sessions.
 """
 
 import json
