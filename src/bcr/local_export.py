@@ -73,7 +73,7 @@ def trigger_download(zip_path: Path) -> None:
 def check_disk_space(
     output_dir: Path, min_free_gb: float = 2.0
 ) -> tuple[bool, str]:
-    """Verifica si hay suficiente espacio libre en disco para render.
+    """Check whether enough disk space is available for rendering.
 
     Args:
         output_dir: Directory where frames will be written.
@@ -95,7 +95,7 @@ def check_disk_space(
         return (True, "")
 
     msg = (
-        f"Espacio libre insuficiente: {free_gb:.1f} GB disponibles, "
+        f"Insufficient free space: {free_gb:.1f} GB available, "
         f"se requieren al menos {min_free_gb:.1f} GB"
     )
     return (False, msg)
