@@ -1,15 +1,15 @@
-"""Backend alternativo de Drive via API (service account), sin necesidad
+"""Alternative Drive API backend (service account), without requiring
 de montar Drive interactivamente con google.colab.drive.mount().
 
 Se activa como opcion (DRIVE_ACCESS_MODE="service_account" en el notebook);
-el modo por defecto (Drive montado) sigue funcionando exactamente igual,
-sin cambios -- ver render_orchestrator.py y state_manager.py, que aceptan
-un backend opcional (por defecto None = comportamiento actual).
+the default mode (mounted Drive) to change its existing behavior,
+see render_orchestrator.py and state_manager.py, which accept
+an optional backend (None by default, preserving current behavior).
 
 Requiere dos secretos de Colab:
   - GDRIVE_SERVICE_ACCOUNT_JSON: contenido completo del JSON de la
     service account (con la Drive API habilitada en el proyecto de GCP).
-  - GDRIVE_FOLDER_ID: ID de la carpeta de Drive (compartida con el email
+  - GDRIVE_FOLDER_ID: Drive folder ID (shared with the service-account email
     de la service account, client_email dentro del JSON) que actua como
     raiz para este backend.
 """
@@ -56,14 +56,14 @@ class ServiceAccountDriveBackend:
         """Build the backend by reading credentials from Colab Secrets.
 
         Raises:
-            DriveBackendError: si falta un secreto, el JSON es invalido,
-                las librerias no estan instaladas, o la carpeta no es
+            DriveBackendError: if a secret is missing, the JSON is invalid,
+                required libraries are not installed, or the folder is not
                 accesible con esas credenciales.
         """
         try:
             from google.colab import userdata
         except ImportError as exc:
-            msg = "ServiceAccountDriveBackend solo esta disponible en Google Colab."
+            msg = "ServiceAccountDriveBackend is only available in Google Colab."
             raise DriveBackendError(msg) from exc
 
         try:
@@ -81,7 +81,7 @@ class ServiceAccountDriveBackend:
         except Exception as exc:
             msg = (
                 f"Could not read the secret '{_FOLDER_SECRET_NAME}'. Create it "
-                "en Colab -> Secretos, con el ID de la carpeta de Drive "
+                "in Colab -> Secrets, with the Drive folder ID "
                 "(la parte final de su URL)."
             )
             raise DriveBackendError(msg) from exc
@@ -89,7 +89,7 @@ class ServiceAccountDriveBackend:
         try:
             sa_info = json.loads(sa_raw)
         except json.JSONDecodeError as exc:
-            msg = f"El secreto '{_SA_SECRET_NAME}' no contiene JSON valido."
+            msg = f"Secret '{_SA_SECRET_NAME}' does not contain valid JSON."
             raise DriveBackendError(msg) from exc
 
         try:
@@ -120,7 +120,7 @@ class ServiceAccountDriveBackend:
             True if the folder is accessible.
 
         Raises:
-            DriveBackendError: si la carpeta no existe, no es una carpeta,
+            DriveBackendError: if the folder does not exist, is not a folder,
                 o no fue compartida con el email de la service account.
         """
         try:
