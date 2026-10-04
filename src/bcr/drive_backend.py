@@ -1,16 +1,16 @@
 """Alternative Drive API backend (service account), without requiring
 de montar Drive interactivamente con google.colab.drive.mount().
 
-Se activa como opcion (DRIVE_ACCESS_MODE="service_account" en el notebook);
+Enable this option with DRIVE_ACCESS_MODE="service_account" in the notebook;
 the default mode (mounted Drive) to change its existing behavior,
 see render_orchestrator.py and state_manager.py, which accept
 an optional backend (None by default, preserving current behavior).
 
-Requiere dos secretos de Colab:
-  - GDRIVE_SERVICE_ACCOUNT_JSON: contenido completo del JSON de la
+Two Colab Secrets are required:
+  - GDRIVE_SERVICE_ACCOUNT_JSON: the full JSON contents for the
     service account (con la Drive API habilitada en el proyecto de GCP).
   - GDRIVE_FOLDER_ID: Drive folder ID (shared with the service-account email
-    de la service account, client_email dentro del JSON) que actua como
+    service account; client_email in that JSON) that acts as
     raiz para este backend.
 """
 
@@ -32,9 +32,9 @@ class DriveBackendError(Exception):
 
 
 class ServiceAccountDriveBackend:
-    """Backend de Drive que usa la API v3 con una service account.
+    """Drive backend that uses the v3 API with a service account.
 
-    Cumple el mismo rol que drive_sync.py + state_manager.py cuando Drive
+    It serves the same role as drive_sync.py + state_manager.py when Drive
     is mounted (upload frames, create folders, list existing frames,
     save/load state), without drive.mount() or interactive authorization:
     authentication uses a service account read from Colab Secrets.
@@ -71,7 +71,7 @@ class ServiceAccountDriveBackend:
         except Exception as exc:
             msg = (
                 f"Could not read the secret '{_SA_SECRET_NAME}'. Create it in "
-                "Colab -> Secretos, con el JSON completo de la service "
+                "Colab -> Secrets, with the complete service-account JSON "
                 "account, y activa el acceso para este notebook."
             )
             raise DriveBackendError(msg) from exc
@@ -121,7 +121,7 @@ class ServiceAccountDriveBackend:
 
         Raises:
             DriveBackendError: if the folder does not exist, is not a folder,
-                o no fue compartida con el email de la service account.
+                or has not been shared with the service-account email.
         """
         try:
             meta = (
@@ -143,14 +143,14 @@ class ServiceAccountDriveBackend:
         return True
 
     # ------------------------------------------------------------------
-    # Carpetas
+    # Folders
     # ------------------------------------------------------------------
 
     def ensure_output_dir(self, relative_path: str = "") -> str:
-        """Encuentra o crea una ruta de carpetas anidada bajo la raiz.
+        """Find or create a nested folder path under the root.
 
         Args:
-            relative_path: Subcarpetas separadas por "/", relativas a la
+            relative_path: Subfolders separated by "/", relative to the
                 root folder (GDRIVE_FOLDER_ID). An empty string means the root folder.
 
         Returns:
@@ -222,22 +222,22 @@ class ServiceAccountDriveBackend:
         """Sube un frame rendering a Drive via API.
 
         Misma logica de nombrado que drive_sync.upload_frame: preserva el
-        nombre original por defecto (evita colisiones entre multiples
+        original name by default (avoids collisions between multiple
         salidas por frame), o usa frame_%06d.ext si preserve_name=False.
 
         Args:
             local_path: Local path to the rendered file.
-            folder_id: folder_id (str) de la carpeta de salida en Drive.
+            folder_id: folder ID (str) of the Drive output folder.
             frame_num: Numero de frame (para el nombre fallback).
-            subdir: Subcarpeta opcional (ej: nombre del nodo File Output).
+            subdir: Optional subfolder (e.g. a File Output node name).
             preserve_name: Si True, preserva el nombre original.
 
         Raises:
-            DriveBackendError: si el archivo local no existe o falla la subida.
+            DriveBackendError: if the local file does not exist or upload fails.
         """
         local_path = Path(local_path)
         if not local_path.exists():
-            msg = f"El archivo local no existe: {local_path}"
+            msg = f"Local file does not exist: {local_path}"
             raise DriveBackendError(msg)
 
         if preserve_name:
@@ -281,10 +281,10 @@ class ServiceAccountDriveBackend:
         return result
 
     def list_frame_numbers(self, folder_id) -> list:
-        """Lista numeros de frame ya subidos, recorriendo subcarpetas.
+        """List uploaded frame numbers by traversing subfolders.
 
         Uses extract_frame_number() (exactly six digits), the same
-        funcion que usa el orquestador para detectar "Saved:" y que usa
+        function used by the orchestrator to detect "Saved:" lines and by
         drive_sync.list_frames_in_drive -- para mantener consistencia.
         """
         frames: list = []
@@ -325,12 +325,12 @@ class ServiceAccountDriveBackend:
         return sorted(set(frames))
 
     # ------------------------------------------------------------------
-    # Estado (para reanudacion)
+    # State (for resuming)
     # ------------------------------------------------------------------
 
     def save_state(self, folder_id, last_frame: int, total_frames: int) -> RenderState:
-        """Guarda el estado del render en Drive via API (equivalente a
-        state_manager.save_state, pero sin filesystem montado)."""
+        """Save render state to Drive through the API (equivalent to
+        state_manager.save_state, but without a mounted filesystem)."""
         state_folder_id = self._find_or_create_folder(str(folder_id), STATE_DIR_NAME)
         state = RenderState(last_frame=last_frame, total_frames=total_frames)
         content = json.dumps(state.to_dict(), indent=2).encode("utf-8")
@@ -338,7 +338,7 @@ class ServiceAccountDriveBackend:
         try:
             from googleapiclient.http import MediaInMemoryUpload
         except ImportError as exc:
-            msg = "Falta google-api-python-client para guardar el estado."
+            msg = "google-api-python-client is required to save state."
             raise DriveBackendError(msg) from exc
 
         media = MediaInMemoryUpload(content, mimetype="application/json")
@@ -350,15 +350,15 @@ class ServiceAccountDriveBackend:
                 metadata = {"name": STATE_FILE_NAME, "parents": [state_folder_id]}
                 self._service.files().create(body=metadata, media_body=media).execute()
         except Exception as exc:
-            msg = f"Error al guardar el estado en Drive: {exc}"
+            msg = f"Failed to save state to Drive: {exc}"
             raise DriveBackendError(msg) from exc
 
         return state
 
     def load_state(self, folder_id, total_frames: int) -> int:
-        """Carga el ultimo frame confirmado desde el estado en Drive.
+        """Load the last confirmed frame from the state stored in Drive.
 
-        Igual que state_manager.load_state: devuelve 0 si no hay estado
+        Like state_manager.load_state: return 0 if no state exists
         previo, si el JSON esta corrupto, o si total_frames no coincide
         (trabajo nuevo con distinta duracion).
         """
