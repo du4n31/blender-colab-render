@@ -137,5 +137,5 @@ class TestCheckDiskSpace(unittest.TestCase):
         mock_disk_usage.return_value = MagicMock(free=0.5 * 1024**3)
         ok, msg = check_disk_space(self._tmpdir, min_free_gb=2.0)
         self.assertFalse(ok)
-        self.assertIn("insuficiente", msg.lower())
+        self.assertIn("insufficient", msg.lower())
         self.assertIn("GB", msg)
