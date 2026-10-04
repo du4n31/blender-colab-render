@@ -1,107 +1,60 @@
-# Arquitectura
+# Architecture
 
-## Vision general
+## Overview
 
-Blender Colab Render es un pipeline de render que ejecuta Blender en Google Colab
-y entrega los frames a Google Drive uno por uno. La arquitectura separa tres
-entornos de ejecucion distintos:
+Blender Colab Render orchestrates Blender in Google Colab and transfers rendered frames to Google Drive. The system separates notebook interaction, Python orchestration, and Blender's embedded Python runtime.
 
-```
-[Notebook Colab]            [Kernel Python]                [Python embebido Blender]
-  (ipywidgets, pip)            (src/bcr/)                    (bpy + stdlib)
-       |                            |                              |
-  Config user                  Resolver enlace                Configurar dispositivo
-  Montar Drive                 Aprovisionar Blender          Configurar output mode
-  UI de progreso               Orquestar subproceso          Render
-  Resumen final                Leer stdout
-                               Subir frames a Drive
-```
-
-## Principios de diseno
-
-1. **El notebook es una capa delgada**: las celdas importan y configuran,
-   no reimplementan logica. Todo lo importante vive en `src/bcr/`.
-
-2. **Dos entornos Python distintos** (ver SEccion 6.1 del PLAN):
-   - El kernel del notebook tiene pip completo (`requests`, `ipywidgets`, `gdown`)
-   - El script que Blender ejecuta con `--python` usa solo stdlib + `bpy`
-   - El puente entre ambos es el stdout de Blender y los archivos en disco
-
-3. **Un solo proceso de Blender por trabajo**: no se relanza Blender por cada frame.
-   La paralelizacion es entre render (GPU) y subida a Drive (CPU/IO).
-
-## Modulos
-
-### src/bcr/config.py
-Constantes (version de Blender, URLs, patrones de archivo) y funciones de validacion
-(frame range, ruta de Drive, URL). No tiene dependencias externas.
-
-### src/bcr/link_resolver.py
-Resuelve enlaces de distintos proveedores a URLs de descarga directa.
-- Directo: pasa tal cual
-- Dropbox: ?dl=0 -> ?dl=1
-- Google Drive: extrae file_id, construye URL de descarga
-- MediaFire: parsea HTML de la pagina de descarga
-
-### src/bcr/blender_provisioning.py
-Descarga el .tar.xz de Blender desde download.blender.org, lo extrae y devuelve
-la ruta al binario. Soporta cache en Drive.
-
-### src/bcr/device_config.py
-Configuracion de GPU/CPU/OptiX para Cycles, disenado para ejecutarse dentro de
-Blender. Obligatorio llamar a `get_devices()` en background mode.
-
-### src/bcr/state_manager.py
-Archivo JSON de estado en Drive para reanudacion. La reconciliacion contra archivos
-reales en Drive previene estados corruptos por caidas a mitad de escritura.
-
-### src/bcr/render_orchestrator.py
-Corazon del sistema. Lanza Blender con los argumentos en el orden correcto
-(verificable por test), parsea stdout buscando `Saved:`, y encola la subida
-a Drive en un ThreadPoolExecutor mientras Blender sigue renderizando.
-
-### src/bcr/drive_sync.py
-Capa fina sobre shutil/os para copiar frames a Drive y borrarlos localmente.
-Drive esta montado como sistema de archivos, no se necesita API.
-
-### src/bcr/progress_ui.py
-Widgets ipywidgets para monitor en vivo. Sin emojis, etiquetas en espanol.
-
-### src/bcr/custom_script_loader.py
-Descarga scripts .py desde URLs y los prepara para pasarlos a Blender.
-
-## blender_scripts/render_frame_driver.py
-Unico script que se ejecuta dentro de Blender. Parsea `--output-mode` y
-`--cycles-device` de `sys.argv` (despues de `--`) y configura todo antes del render.
-
-### Dependencia de Blender 5.0+
-Este script usa propiedades introducidas en Blender 5.0:
-- `scene.compositing_node_group` (reemplaza a `scene.node_tree`, que era de solo lectura)
-- `node.directory` (reemplaza a `node.base_path`)
-- `node.file_output_items` (reemplaza a `node.file_slots`/`node.layer_slots`)
-- `scene.render.use_compositing`/`use_sequencer` (reemplaza a `scene.use_nodes`)
-
-No es compatible con Blender <=4.5 en su funcion de remapeo de File Output nodes.
-El modo sequencer no usa estas propiedades y sigue funcionando en versiones anteriores.
-
-## Flujo de datos
-
-```
-1. [Notebook] Config user -> src/bcr/config.py (validacion)
-2. [Notebook] Resolver enlace -> link_resolver.resolve_download_url()
-3. [Paralelo] Descargar .blend + Aprovisionar Blender
-4. [Notebook] Montar Drive
-5. [Notebook] RenderOrchestrator.build_command() -> list[str]
-6. [Orch] subprocess.Popen(blender, ...) con stdout pipe
-7. [Orch] readline() loop: detectar "Saved: '/ruta/frame_NNNNNN.png'"
-8. [Orch] Por cada frame: ThreadPoolExecutor.submit(upload_and_cleanup)
-9. [Upload] shutil.copy2() a Drive + os.remove() local + save_state()
-10. [Orch] Al terminar: reconciliacion de frames pendientes
+```text
+[Colab notebook]       [Python orchestration]       [Blender Python runtime]
+ ipywidgets / config      src/bcr/                   bpy + standard library
+       |                     |                              |
+ Mount Drive              Resolve scene source          Configure device
+ Collect settings         Provision Blender             Configure outputs
+ Show progress            Launch subprocess             Execute render
+                          Parse stdout                  Write frame files
+                          Upload completed frames
+                          Persist/reconcile state
 ```
 
-## Seguridad
+## Design principles
 
-- Todos los comandos se construyen como listas (nunca shell=True)
-- Las URLs y rutas de usuario se validan antes de usar
-- No se hardcodean credenciales (Drive usa OAuth interactivo)
-- Backlog limitado a BACKLOG_LIMIT frames locales
+1. **Keep the notebook thin.** The notebook should collect configuration and coordinate user-visible steps; reusable behavior belongs in `src/bcr/`.
+2. **Treat the Python environments separately.** The Colab kernel can use installed packages such as `requests`, `ipywidgets`, and Google API clients. Scripts executed by Blender must not assume those packages exist in Blender's embedded Python.
+3. **Use one Blender process per render job where possible.** The orchestration layer monitors stdout and coordinates uploads while rendering continues.
+4. **Make output files and checkpoints consistent.** A saved state file is a checkpoint, not sufficient evidence that every preceding frame exists. Resume logic should reconcile the checkpoint with actual output files and never silently skip a gap.
+5. **Keep storage backends explicit.** Mounted Drive uses filesystem paths; service-account mode uses Drive API operations. Code must not treat these interfaces as interchangeable.
+6. **Keep credentials out of logs and source control.** Tokens and service-account credentials should be supplied through Colab Secrets or secure prompts.
+
+## Main modules
+
+- `config.py`: constants, frame-range validation, path validation, and frame-number parsing.
+- `source_resolver.py` and `link_resolver.py`: acquire scene files and supported source URLs.
+- `blender_provisioning.py`: discover available Blender releases and provision a selected build.
+- `device_config.py`: configure the render device from the requested backend.
+- `state_manager.py`: load/save checkpoints and reconcile state against existing frame files.
+- `render_orchestrator.py`: build the Blender command, monitor output, track progress, upload completed frames, and handle resume.
+- `drive_backend.py` and `drive_sync.py`: storage operations for API-backed and mounted Drive modes.
+- `local_export.py`: local output packaging and download support.
+- `progress_ui.py`: optional notebook progress display.
+- `blender_scripts/render_frame_driver.py`: configure Blender-side rendering and output paths.
+
+## Resume contract
+
+The requested frame range is the source of truth for the job's boundaries. Resume logic should:
+
+1. Enumerate valid rendered image files in the selected output location, including supported compositor subdirectories.
+2. Interpret frame numbers consistently with the requested absolute frame range.
+3. Find the highest contiguous completed frame starting at the requested start frame.
+4. Resume at the first missing frame, rather than skipping gaps because a later file exists.
+5. Complete without launching Blender only when all requested frames are confirmed.
+6. Keep progress counters relative to the original requested range, even if the effective render start changes.
+
+ZIP-only output is local to the current runtime and cannot provide the same persistence guarantee as Drive output.
+
+## Media and compositor paths
+
+Video texture diagnostics should report Blender's FFmpeg build capability, unresolved media paths, and relevant movie/image resources. Diagnostics are not a substitute for decoding and rendering a real sample video. Compositor File Output nodes may use arbitrary path prefixes; output remapping must avoid leaking host-specific Windows paths into the Colab filesystem and must preserve distinct node destinations.
+
+## Validation boundaries
+
+Unit tests can verify argument construction, checkpoint reconciliation, path mapping, and mocked storage behavior. They cannot establish that a real Blender build decodes a given MP4, that a Colab GPU is available, or that Google Drive permissions are correct. Those require integration tests in the target runtime.
