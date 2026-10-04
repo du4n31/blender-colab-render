@@ -284,7 +284,7 @@ def _remap_file_output_nodes(
         old_base = getattr(node, "directory", "")
 
         # Clean the original path by removing Windows prefixes and normalizing it
-        # P. ej. "C:\\Users\\..." -> "Users/...", "/tmp\\" -> "tmp"
+        # For example, "C:\\Users\\..." -> "Users/...", "/tmp\\" -> "tmp"
         # Use the node name, never the artist workstation path, for output folders.
         safe_node_name = _unique_safe_node_name(node_name, used_node_names)
         new_base = str(Path(output_dir) / safe_node_name)
@@ -296,8 +296,8 @@ def _remap_file_output_nodes(
         )
 
         if is_multilayer:
-            # En EXR multilayer, el marcador de frame va en file_name (que
-            # es la unica propiedad que determina el nombre fisico del
+            # For multilayer EXR, the frame marker belongs in file_name (the
+            # only property that determines the physical filename
             # file). item.name values are internal layers and are not modified.
             node.file_name = f"{safe_node_name}_######"
             print(
@@ -344,8 +344,8 @@ def _remap_file_output_nodes(
         )
         if warn_no_slots:
             print(
-                f"[driver] WARNING: {warn_no_slots} nodo(s) "
-                "no tienen file_output_items"
+                f"[driver] WARNING: {warn_no_slots} node(s) 
+                "have no file_output_items"
             )
 
 
