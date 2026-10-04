@@ -117,7 +117,7 @@ class TestCheckDiskSpace(unittest.TestCase):
         """Non-existent directory returns (False, message)."""
         ok, msg = check_disk_space(Path("/nonexistent_path_12345"), min_free_gb=2.0)
         self.assertFalse(ok)
-        self.assertIn("no existe", msg.lower())
+        self.assertIn("does not exist", msg.lower())
 
     @patch("shutil.disk_usage")
     def test_sufficient_space_returns_true(
