@@ -8,7 +8,7 @@ import os
 import shutil
 from pathlib import Path
 
-from bcr.config import DRIVE_MOUNT_POINT, extract_frame_number
+from bcr.config import DRIVE_MOUNT_POINT, RENDERED_IMAGE_EXTENSIONS, extract_frame_number
 
 
 class DriveSyncError(Exception):
@@ -139,6 +139,8 @@ def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
     frames: list[int] = []
     for root, _dirs, files in os.walk(str(drive_output_dir)):
         for entry in files:
+            if Path(entry).suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                continue
             frame_num = extract_frame_number(entry)
             if frame_num is not None:
                 frames.append(frame_num)
