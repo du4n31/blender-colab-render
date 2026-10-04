@@ -219,14 +219,14 @@ class ServiceAccountDriveBackend:
         subdir: str = "",
         preserve_name: bool = True,
     ) -> dict:
-        """Sube un frame renderizado a Drive via API.
+        """Sube un frame rendering a Drive via API.
 
         Misma logica de nombrado que drive_sync.upload_frame: preserva el
         nombre original por defecto (evita colisiones entre multiples
         salidas por frame), o usa frame_%06d.ext si preserve_name=False.
 
         Args:
-            local_path: Ruta local al archivo renderizado.
+            local_path: Ruta local al archivo rendering.
             folder_id: folder_id (str) de la carpeta de salida en Drive.
             frame_num: Numero de frame (para el nombre fallback).
             subdir: Subcarpeta opcional (ej: nombre del nodo File Output).
