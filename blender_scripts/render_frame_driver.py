@@ -202,6 +202,19 @@ def _configure_output_mode(mode: str) -> None:
         scene.render.use_sequencer = False
 
 
+
+def _unique_safe_node_name(node_name: str, used_names: set[str]) -> str:
+    """Return a filesystem-safe, unique folder name for a compositor node."""
+    base_name = re.sub(r"[^A-Za-z0-9_]+", "_", node_name).strip("_") or "compositor_output"
+    candidate = base_name
+    suffix = 2
+    while candidate.casefold() in used_names:
+        candidate = f"{base_name}_{suffix}"
+        suffix += 1
+    used_names.add(candidate.casefold())
+    return candidate
+
+
 def _remap_file_output_nodes(
     output_dir: str = "/content/render_tmp",
     output_mode: str = "compositor",
@@ -262,6 +275,7 @@ def _remap_file_output_nodes(
 
     remapped = 0
     warn_no_slots = 0
+    used_node_names: set[str] = set()
     for node in node_tree.nodes:
         if node.type != "OUTPUT_FILE":
             continue
@@ -272,7 +286,7 @@ def _remap_file_output_nodes(
         # Clean the original path by removing Windows prefixes and normalizing it
         # P. ej. "C:\\Users\\..." -> "Users/...", "/tmp\\" -> "tmp"
         # Use the node name, never the artist workstation path, for output folders.
-        safe_node_name = re.sub(r"[^A-Za-z0-9_]+", "_", node_name).strip("_") or "compositor_output"
+        safe_node_name = _unique_safe_node_name(node_name, used_node_names)
         new_base = str(Path(output_dir) / safe_node_name)
         node.directory = new_base
 
@@ -287,9 +301,9 @@ def _remap_file_output_nodes(
             # file). item.name values are internal layers and are not modified.
             node.file_name = f"{safe_node_name}_######"
             print(
-                f"[driver] Nodo '{node_name}' es EXR multilayer, "
+                f"[driver] Node '{node_name}' is multilayer EXR, "
                 f"file_name -> '{node.file_name}' "
-                f"({len(node.file_output_items)} capas preservadas)"
+                f"({len(node.file_output_items)} layers preserved)"
             )
         else:
             # In single-layer nodes, each item is a separate file.
@@ -309,7 +323,7 @@ def _remap_file_output_nodes(
             warn_no_slots += 1
 
         print(
-            f"[driver] Nodo '{node_name}' remapeado: "
+            f"[driver] Node '{node_name}' remapped: "
             f"'{old_base}' -> '{new_base}'"
         )
 
@@ -325,8 +339,8 @@ def _remap_file_output_nodes(
         sys.exit(1)
     else:
         print(
-            f"[driver] {remapped} nodo(s) File Output remapeado(s) "
-            f"a {output_dir}/"
+            f"[driver] Remapped {remapped} File Output node(s) "
+            f"to {output_dir}/"
         )
         if warn_no_slots:
             print(
