@@ -8,7 +8,7 @@ import pytest
 
 
 class TestPackageImports:
-    """Verifica que el paquete bcr se importa sin errores."""
+    """Verify that the bcr package imports without errors."""
 
     def test_import_config(self):
         from bcr import config
@@ -50,7 +50,7 @@ class TestPackageImports:
 
 
 class TestConfigValidation:
-    """Verifica las funciones de validacion de config."""
+    """Verify configuration validation helpers."""
 
     def test_validate_frame_range_valid(self):
         from bcr.config import validate_frame_range
