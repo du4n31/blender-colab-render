@@ -78,9 +78,9 @@ def _parse_custom_args(argv: list[str]) -> dict[str, str]:
     i = 0
     while i < len(argv):
         if argv[i].startswith("--") and i + 1 < len(argv):
-            key = argv[i][2:]  # quitar --
+            key = argv[i][2:]  # strip leading --
             value = argv[i + 1]
-            # Solo nos interesan nuestros argumentos
+            # Only parse the arguments owned by this driver
             if key in (
                 "cycles-device",
                 "output-mode",
@@ -181,7 +181,7 @@ def _configure_output_mode(mode: str) -> None:
     """Configure whether output uses the compositor or sequencer.
 
     Args:
-        mode: 'compositor' o 'sequencer'
+        mode: 'compositor' or 'sequencer'
     """
     import bpy
 
