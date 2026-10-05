@@ -18,7 +18,7 @@ from bcr.drive_sync import (
 
 
 class TestUploadFrame(unittest.TestCase):
-    """Prueba upload_frame con y sin subdirectorio."""
+    """Test upload_frame with and without a subdirectory."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -29,7 +29,7 @@ class TestUploadFrame(unittest.TestCase):
         shutil.rmtree(str(self._tmpdir), ignore_errors=True)
 
     def test_upload_basic_preserves_name(self) -> None:
-        """Subida basica: archivo se copia con su nombre original."""
+        """Basic upload: preserve the original file name."""
         src = self._tmpdir / "beauty_0001.exr"
         src.write_text("fake-exr")
         result = upload_frame(src, self._drive, frame_num=1)
@@ -37,7 +37,7 @@ class TestUploadFrame(unittest.TestCase):
         self.assertTrue(result.exists())
 
     def test_upload_with_subdir_preserves_name(self) -> None:
-        """Subida con subdir: archivo se copia a subdirectorio con nombre original."""
+        """Subdirectory upload: preserve the original file name."""
         src = self._tmpdir / "beauty_0001.exr"
         src.write_text("fake-exr")
         result = upload_frame(src, self._drive, frame_num=1, subdir="Temp")
@@ -46,7 +46,7 @@ class TestUploadFrame(unittest.TestCase):
         self.assertTrue(result.exists())
 
     def test_upload_multiple_subdirs_no_collision(self) -> None:
-        """Multiples archivos mismo frame -> distintos subdirectorios, sin sobrescribir."""
+        """Multiple files for one frame use distinct subdirectories without overwriting."""
         src1 = self._tmpdir / "beauty_0001.exr"
         src1.write_text("beauty-data")
         src2 = self._tmpdir / "depth_0001.exr"
@@ -63,7 +63,7 @@ class TestUploadFrame(unittest.TestCase):
         self.assertEqual(r2.read_text(), "depth-data")
 
     def test_upload_no_source_file(self) -> None:
-        """Archivo local inexistente lanza DriveSyncError."""
+        """A missing local file raises DriveSyncError."""
         fake = Path("/tmp/nonexistent_file_12345.png")
         with self.assertRaises(DriveSyncError):
             upload_frame(fake, self._drive, frame_num=1)
@@ -85,7 +85,7 @@ class TestUploadFrame(unittest.TestCase):
         self.assertEqual(result.name, "frame_000042.exr")
 
     def test_defaults_to_png_when_no_extension(self) -> None:
-        """Archivo sin extension usa .png por defecto (solo con preserve_name=False)."""
+        """An extensionless file defaults to .png only when preserve_name=False."""
         src = self._tmpdir / "output"
         src.write_text("data")
         result = upload_frame(src, self._drive, frame_num=1, preserve_name=False)
@@ -94,10 +94,10 @@ class TestUploadFrame(unittest.TestCase):
 
 
 class TestRemoveLocal(unittest.TestCase):
-    """Prueba remove_local."""
+    """Test remove_local."""
 
     def test_removes_existing_file(self) -> None:
-        """Archivo existente se borra."""
+        """An existing file is removed."""
         f = Path(tempfile.mkstemp()[1])
         f.write_text("hello")
         remove_local(f)
