@@ -112,7 +112,7 @@ def _acquire_from_drive(value: str, working_dir: Path) -> Path:
     ``value`` may be a path relative to the Drive mount point
     (p.ej. "MyDrive/escenas/mi_escena.blend", que es lo que el notebook
     prompting the user) or an absolute path inside it. Before copying,
-    Path(value).resolve() resolvia las rutas relativas contra el
+    Path(value).resolve() used to resolve relative paths against the
     the path must be resolved against the Drive mount, not the process working directory (e.g. /content),
     because a relative path that looks correct according to the instructions
     notebook nunca se encontraba.
