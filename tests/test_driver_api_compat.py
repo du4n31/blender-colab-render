@@ -77,11 +77,11 @@ class TestDriverApiCompat(unittest.TestCase):
         self.assertEqual(third, "Beauty_Pass_3")
 
     def test_driver_source_exists(self) -> None:
-        """El archivo del driver debe existir."""
+        """The driver file must exist."""
         self.assertTrue(DRIVER_PATH.exists(), f"Driver no encontrado: {DRIVER_PATH}")
 
     def test_no_deprecated_scene_node_tree(self) -> None:
-        """No debe usar scene.node_tree (usar scene.compositing_node_group)."""
+        """Do not use scene.node_tree; use scene.compositing_node_group."""
         violations = _find_violations("scene.node_tree", r"scene\.node_tree")
         self.assertFalse(
             violations,
@@ -91,7 +91,7 @@ class TestDriverApiCompat(unittest.TestCase):
         )
 
     def test_no_deprecated_base_path(self) -> None:
-        """No debe usar .base_path (usar .directory)."""
+        """Do not use .base_path; use .directory."""
         violations = _find_violations(".base_path", r"\.base_path")
         self.assertFalse(
             violations,
@@ -101,7 +101,7 @@ class TestDriverApiCompat(unittest.TestCase):
         )
 
     def test_no_deprecated_file_slots(self) -> None:
-        """No debe usar .file_slots (usar .file_output_items)."""
+        """Do not use .file_slots; use .file_output_items."""
         violations = _find_violations(".file_slots", r"\.file_slots")
         self.assertFalse(
             violations,
@@ -111,7 +111,7 @@ class TestDriverApiCompat(unittest.TestCase):
         )
 
     def test_no_deprecated_layer_slots(self) -> None:
-        """No debe usar .layer_slots (usar .file_output_items)."""
+        """Do not use .layer_slots; use .file_output_items."""
         violations = _find_violations(".layer_slots", r"\.layer_slots")
         self.assertFalse(
             violations,
@@ -121,7 +121,7 @@ class TestDriverApiCompat(unittest.TestCase):
         )
 
     def test_no_deprecated_scene_use_nodes(self) -> None:
-        """No debe usar scene.use_nodes (usar scene.render.use_compositing)."""
+        """Do not use scene.use_nodes; use scene.render.use_compositing."""
         violations = _find_violations("scene.use_nodes", r"scene\.use_nodes")
         self.assertFalse(
             violations,
@@ -131,7 +131,7 @@ class TestDriverApiCompat(unittest.TestCase):
         )
 
     def test_no_node_inputs_file_name(self) -> None:
-        """No debe usar node.inputs['File Name'] (usar node.file_name)."""
+        """Do not use node.inputs['File Name']; use node.file_name."""
         violations = _find_violations(
             "node.inputs[",
             r"""node\.inputs\["File Name"\]|node\.inputs\['File Name'\]""",
