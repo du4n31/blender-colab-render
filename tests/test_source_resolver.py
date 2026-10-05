@@ -1,6 +1,6 @@
-"""Pruebas para source_resolver.py.
+"""Tests for source_resolver.py.
 
-Valida adquisicion por link, upload, drive_path y resolucion de ZIPs.
+Validate link, upload, drive_path, and ZIP acquisition.
 """
 
 import shutil
@@ -32,7 +32,7 @@ class TestAcquireSourceLink(unittest.TestCase):
     def test_happy_path_downloads_file(
         self, mock_get: Mock, mock_resolve: Mock
     ) -> None:
-        """Enlace valido: descarga el archivo al working_dir."""
+        """A valid link downloads the file into working_dir."""
         mock_resolve.return_value = "https://direct.example.com/file.blend"
         mock_response = Mock()
         mock_response.raise_for_status = Mock()
@@ -63,7 +63,7 @@ class TestAcquireSourceLink(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             acquire_source("link", "https://example.com/bad", self._tmpdir)
-        self.assertIn("Error al resolver URL", str(ctx.exception))
+        self.assertIn("Failed to resolve URL", str(ctx.exception))
 
     @patch("bcr.source_resolver.link_resolver.resolve_download_url")
     @patch("bcr.source_resolver.requests.get")
@@ -78,7 +78,7 @@ class TestAcquireSourceLink(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             acquire_source("link", "https://example.com/file.blend", self._tmpdir)
-        self.assertIn("Error al descargar", str(ctx.exception))
+        self.assertIn("Failed to download", str(ctx.exception))
 
 
 class TestAcquireSourceDrivePath(unittest.TestCase):
@@ -93,7 +93,7 @@ class TestAcquireSourceDrivePath(unittest.TestCase):
         shutil.rmtree(str(self._tmpdir), ignore_errors=True)
 
     def test_happy_path_copies_file(self) -> None:
-        """Archivo dentro de Drive se copia correctamente."""
+        """A file inside Drive is copied successfully."""
         source_file = self._drive_root / "test.blend"
         source_file.write_text("blend data")
 
@@ -109,8 +109,8 @@ class TestAcquireSourceDrivePath(unittest.TestCase):
         self.assertEqual(expected.read_text(), "blend data")
 
     def test_relative_path_resolves_against_drive_root(self) -> None:
-        """Una ruta relativa (como la que pide el notebook, p.ej.
-        "MyDrive/escenas/mi_escena.blend") debe resolverse contra el
+        """A relative path (such as the path requested by the notebook, e.g.
+        "MyDrive/escenas/mi_escena.blend") must be resolved against the
         punto de montaje de Drive, no contra el cwd del proceso."""
         (self._drive_root / "MyDrive" / "escenas").mkdir(parents=True)
         source_file = self._drive_root / "MyDrive" / "escenas" / "mi_escena.blend"
@@ -127,7 +127,7 @@ class TestAcquireSourceDrivePath(unittest.TestCase):
         self.assertEqual(expected.read_text(), "blend data")
 
     def test_path_outside_drive_raises(self) -> None:
-        """Ruta fuera del punto de montaje de Drive lanza error."""
+        """A path outside the Drive mount point raises an error."""
         outside_file = self._tmpdir / "outside.blend"
         outside_file.write_text("data")
 
@@ -137,10 +137,10 @@ class TestAcquireSourceDrivePath(unittest.TestCase):
                 acquire_source(
                     "drive_path", str(outside_file), self._tmpdir
                 )
-            self.assertIn("debe estar dentro de", str(ctx.exception))
+            self.assertIn("Path must be inside", str(ctx.exception))
 
     def test_nonexistent_file_raises(self) -> None:
-        """Archivo inexistente dentro de Drive lanza error."""
+        """A missing file inside Drive raises an error."""
         nonexistent = self._drive_root / "missing.blend"
 
         with patch("bcr.source_resolver.DRIVE_MOUNT_POINT") as mock_drive:
@@ -149,7 +149,7 @@ class TestAcquireSourceDrivePath(unittest.TestCase):
                 acquire_source(
                     "drive_path", str(nonexistent), self._tmpdir
                 )
-            self.assertIn("no existe", str(ctx.exception))
+            self.assertIn("does not exist", str(ctx.exception))
 
 
 class TestAcquireSourceUpload(unittest.TestCase):
@@ -175,7 +175,7 @@ class TestAcquireSourceUpload(unittest.TestCase):
             with self.assertRaises(SourceAcquisitionError) as ctx:
                 acquire_source("upload", "", self._tmpdir)
             self.assertIn(
-                "solo esta disponible en Google Colab",
+                "only available in Google Colab",
                 str(ctx.exception),
             )
 
@@ -190,7 +190,7 @@ class TestResolveZipContents(unittest.TestCase):
         shutil.rmtree(str(self._tmpdir), ignore_errors=True)
 
     def test_blend_zip_single_blend_returns_path(self) -> None:
-        """ZIP con un .blend devuelve la ruta al archivo."""
+        """A ZIP containing one .blend file returns its path."""
         zip_path = self._tmpdir / "scene.zip"
         with zipfile.ZipFile(str(zip_path), "w") as zf:
             zf.writestr("model.blend", b"blend content")
@@ -211,7 +211,7 @@ class TestResolveZipContents(unittest.TestCase):
         with self.assertRaises(SourceAcquisitionError) as ctx:
             resolve_zip_contents(zip_path, self._tmpdir, "blend")
         msg = str(ctx.exception)
-        self.assertIn("archivos .blend", msg)
+        self.assertIn(".blend files", msg)
         self.assertIn("model1.blend", msg)
         self.assertIn("model2.blend", msg)
 
@@ -223,7 +223,7 @@ class TestResolveZipContents(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             resolve_zip_contents(zip_path, self._tmpdir, "blend")
-        self.assertIn("No se encontraron archivos .blend", str(ctx.exception))
+        self.assertIn("No .blend files were found", str(ctx.exception))
 
     def test_script_zip_with_entry_point(self) -> None:
         """ZIP script con entry_point.txt devuelve [entry, dir]."""
@@ -242,8 +242,21 @@ class TestResolveZipContents(unittest.TestCase):
         self.assertEqual(result[1], expected_dir)
         self.assertTrue(expected_entry.exists())
 
+    def test_script_entry_point_cannot_escape_extraction_directory(self) -> None:
+        """Reject entry_point.txt paths that point outside the extracted ZIP."""
+        zip_path = self._tmpdir / "unsafe_script.zip"
+        outside_script = self._tmpdir / "outside.py"
+        outside_script.write_text("print('should not run')", encoding="utf-8")
+        with zipfile.ZipFile(str(zip_path), "w") as zf:
+            zf.writestr("entry_point.txt", "../outside.py")
+            zf.writestr("helper.py", "def helper(): pass")
+
+        with self.assertRaises(SourceAcquisitionError) as ctx:
+            resolve_zip_contents(zip_path, self._tmpdir, "script")
+        self.assertIn("outside the extraction directory", str(ctx.exception))
+
     def test_script_zip_single_py_without_entry_point(self) -> None:
-        """ZIP script sin entry_point.txt y un solo .py devuelve [py, dir]."""
+        """A script ZIP without entry_point.txt and one .py returns [py, dir]."""
         zip_path = self._tmpdir / "simple_script.zip"
         with zipfile.ZipFile(str(zip_path), "w") as zf:
             zf.writestr("main.py", b"print('hello')")
@@ -257,7 +270,7 @@ class TestResolveZipContents(unittest.TestCase):
         self.assertEqual(result[1], expected_dir)
 
     def test_script_zip_multiple_py_no_entry_point_raises(self) -> None:
-        """ZIP con multiples .py sin entry_point.txt lanza error."""
+        """A ZIP with multiple .py files and no entry_point.txt raises an error."""
         zip_path = self._tmpdir / "multi_script.zip"
         with zipfile.ZipFile(str(zip_path), "w") as zf:
             zf.writestr("main.py", b"print('hello')")
@@ -265,7 +278,7 @@ class TestResolveZipContents(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             resolve_zip_contents(zip_path, self._tmpdir, "script")
-        self.assertIn("archivos .py", str(ctx.exception))
+        self.assertIn(".py files", str(ctx.exception))
 
     def test_zip_slip_rejected_before_extraction(self) -> None:
         """Entrada ZIP con ../ que intenta zip slip es rechazada."""
@@ -275,22 +288,35 @@ class TestResolveZipContents(unittest.TestCase):
 
         with self.assertRaises(SourceAcquisitionError) as ctx:
             resolve_zip_contents(zip_path, self._tmpdir, "blend")
-        self.assertIn("Zip slip", str(ctx.exception))
+        self.assertIn("ZIP slip", str(ctx.exception))
 
-        # Verificar que no hubo extraccion fuera del directorio
+        # Verify that no files were extracted outside the destination directory
         extract_dir = self._tmpdir / "slip"
         self.assertTrue(extract_dir.exists())
         self.assertEqual(list(extract_dir.iterdir()), [])
 
+    def test_zip_slip_rejects_sibling_with_shared_path_prefix(self) -> None:
+        """Reject traversal into a sibling whose path shares the target prefix."""
+        zip_path = self._tmpdir / "prefix-slip.zip"
+        extract_dir = self._tmpdir / "prefix-slip"
+        extract_dir.mkdir()
+        with zipfile.ZipFile(str(zip_path), "w") as zf:
+            zf.writestr("../prefix-slip-escape/evil.txt", b"malicious")
+
+        with self.assertRaises(SourceAcquisitionError) as ctx:
+            resolve_zip_contents(zip_path, self._tmpdir, "blend")
+        self.assertIn("ZIP slip", str(ctx.exception))
+        self.assertFalse((self._tmpdir / "prefix-slip-escape").exists())
+
     def test_non_zip_blend_returns_path(self) -> None:
-        """Archivo no .zip con kind='blend' se devuelve tal cual."""
+        """A non-ZIP file with kind='blend' is returned unchanged."""
         non_zip = self._tmpdir / "scene.blend"
         non_zip.write_text("blend")
         result = resolve_zip_contents(non_zip, self._tmpdir, "blend")
         self.assertEqual(result, non_zip)
 
     def test_non_zip_script_returns_list(self) -> None:
-        """Archivo no .zip con kind='script' se devuelve como [path]."""
+        """A non-ZIP file with kind='script' is returned as [path]."""
         non_zip = self._tmpdir / "script.py"
         non_zip.write_text("print('hello')")
         result = resolve_zip_contents(non_zip, self._tmpdir, "script")
@@ -307,9 +333,9 @@ class TestAcquireSourceUnknownMethod(unittest.TestCase):
         shutil.rmtree(str(self._tmpdir), ignore_errors=True)
 
     def test_unknown_method_raises(self) -> None:
-        """Metodo desconocido lanza SourceAcquisitionError."""
+        """An unknown method raises SourceAcquisitionError."""
         with self.assertRaises(SourceAcquisitionError) as ctx:
             acquire_source("invalid", "value", self._tmpdir)
         self.assertIn(
-            "Metodo de adquisicion desconocido", str(ctx.exception)
+            "Unknown acquisition method", str(ctx.exception)
         )

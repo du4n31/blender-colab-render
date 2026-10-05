@@ -1,9 +1,9 @@
-"""Pruebas para render_orchestrator.py.
+"""Tests for render_orchestrator.py.
 
-Estas pruebas validan la logica que NO depende de una GPU real:
-- Construccion del comando de Blender
-- Parseo de stdout (Saved: lineas)
-- Calculo de metricas
+These tests validate logic that does NOT depend on a real GPU:
+- Blender command construction
+- stdout parsing (Saved: lines)
+- Metric calculations
 """
 
 import re
@@ -18,7 +18,7 @@ from bcr.render_orchestrator import RenderOrchestrator
 
 
 class TestBuildCommand:
-    """Prueba la construccion del comando de Blender."""
+    """Test Blender command construction."""
 
     def test_basic_command_structure(self):
         """El comando incluye los argumentos minimos necesarios."""
@@ -40,7 +40,7 @@ class TestBuildCommand:
         assert "CYCLES" in cmd
 
     def test_render_anim_vs_render_frame(self):
-        """Rango de frames usa --render-anim, frame unico usa --render-frame."""
+        """A frame range uses --render-anim; a single frame uses --render-frame."""
         # Rango
         orch_anim = RenderOrchestrator(
             blender_path=Path("/blender"),
@@ -71,10 +71,10 @@ class TestBuildCommand:
         assert "42" in cmd_single
 
     def test_argument_order_correct(self):
-        """Verifica el orden critical de argumentos.
+        """Verify the critical argument order.
 
-        El .blend debe ir ANTES de --render-output y --render-anim
-        debe ir AL FINAL (antes de --).
+        The .blend file must appear BEFORE --render-output and --render-anim
+        must appear LAST (before --).
         """
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
@@ -87,7 +87,7 @@ class TestBuildCommand:
         )
         cmd = orch.build_command()
 
-        # Encontrar indices
+        # Find argument indices
         idx_background = cmd.index("--background")
         idx_blend = cmd.index("/scene.blend")
         idx_render_output = cmd.index("--render-output")
@@ -95,25 +95,25 @@ class TestBuildCommand:
         idx_ddash = cmd.index("--")
         idx_device = cmd.index("--cycles-device") if "--cycles-device" in cmd else -1
 
-        # El .blend debe ir despues de --background
+        # The .blend file must follow --background
         assert idx_blend > idx_background
 
-        # --render-output debe ir DESPUES de .blend
+        # --render-output must follow the .blend file
         assert idx_render_output > idx_blend
 
-        # --render-anim debe ir DESPUES de --render-output y ANTES de --
+        # --render-anim must follow --render-output and precede --
         if idx_render_anim >= 0:
             assert idx_render_anim > idx_render_output
             assert idx_ddash == -1 or idx_render_anim < idx_ddash or idx_ddash < 0
 
-        # -- debe ser uno de los ultimos
+        # -- must be one of the final arguments
         assert idx_ddash > idx_render_output
 
-        # --cycles-device debe ir DESPUES de --
+        # --cycles-device must follow --
         assert idx_device > idx_ddash
 
     def test_custom_scripts_included(self):
-        """Scripts personalizados se anaden como --python."""
+        """Custom scripts are appended as --python arguments."""
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
             blend_file=Path("/s.blend"),
@@ -134,7 +134,7 @@ class TestBuildCommand:
         assert "/scripts/custom2.py" in cmd
 
     def test_device_and_output_mode_after_ddash(self):
-        """--cycles-device, --output-mode y --output-dir van despues de --."""
+        """--cycles-device, --output-mode, and --output-dir follow --."""
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
             blend_file=Path("/s.blend"),
@@ -165,7 +165,7 @@ class TestBuildCommand:
         assert cmd[outdir_idx + 1] == "/tmp/r"
 
     def test_output_has_render_output(self):
-        """Verifica --render-output para la salida directa del render."""
+        """Verify --render-output for direct render output."""
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
             blend_file=Path("/s.blend"),
@@ -189,17 +189,17 @@ class TestBuildCommand:
         )
         cmd = orch.build_command()
 
-        # No debe contener --render-format ni --use-extension
+        # Must not contain --render-format or --use-extension
         assert "--render-format" not in cmd
         assert "--use-extension" not in cmd
 
 
 class TestParseSavedLine:
-    """Prueba el parseo de lineas 'Saved:' del stdout de Blender.
+    """Test parsing Blender stdout 'Saved:' lines.
 
     Ahora _parse_saved_line devuelve tuple (frame_num, Path) con la
-    ruta exacta que Blender reporta, para poder soportar multiples
-    archivos por frame (varios File Output nodes).
+    the exact path reported by Blender, to support multiple
+    files per frame (multiple File Output nodes).
     """
 
     def test_saved_line_standard(self):
@@ -236,7 +236,7 @@ class TestParseSavedLine:
         assert str(path) == "/tmp/blender_XXXXXX/frame_000001.png"
 
     def test_saved_blender_stdout_pattern(self):
-        """Patron real de stdout de Blender."""
+        """Actual Blender stdout pattern."""
         lines = [
             "Fra:1 Mem:42.35M ( Peak: 45.12M ) | Time: 00:00.53",
             "Saved: '/content/render_tmp/frame_000001.png'",
@@ -267,7 +267,7 @@ class TestParseSavedLine:
         assert result is None
 
     def test_saved_exr_standard(self):
-        """Linea Saved: con archivo EXR (File Output node)."""
+        """Parse a Saved: line for an EXR File Output node."""
         line = "Saved: '/content/render_tmp/File_Output_node000001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
@@ -294,7 +294,7 @@ class TestParseSavedLine:
         assert str(path) == "/content/render_tmp/beauty_000128.exr"
 
     def test_discard_file_ignored(self):
-        """Archivos _discard_ o _render_result_ se ignoran (salida directa)."""
+        """Ignore _discard_ and _render_result_ files from direct output."""
         line = "Saved: '/content/render_tmp/_discard_0001.png'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is None
@@ -327,7 +327,7 @@ class TestParseSavedLine:
                 frame_num, path = result
                 frames.append(frame_num)
                 paths.append(str(path))
-        # Solo los EXR, no el discard
+        # Only EXR files, not disposable output
         assert frames == [1, 1]
         assert paths == [
             "/content/render_tmp/beauty_000001.exr",
@@ -335,13 +335,13 @@ class TestParseSavedLine:
         ]
 
     def test_windows_path_still_parsed(self):
-        """Rutas Windows se parsean como tuple aunque luego se filtran.
+        """Windows paths parse as tuples even if they are filtered later.
 
         _parse_saved_line extrae el frame de cualquier path con patron valido.
         El filtrado de paths invalidos ocurre en _is_valid_output_path (en run()),
         no en el parseo.
         """
-        # Usar un patron que SÍ se pueda parsear (underscore + digitos + .ext)
+        # Use a parseable pattern: underscore + digits + extension
         line = "Saved: 'C:\\\\Users\\\\artista\\\\Documents\\\\file_name_000001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
@@ -351,7 +351,7 @@ class TestParseSavedLine:
 
 
 class TestValidateOutputPath:
-    """Prueba _is_valid_output_path: filtrado de rutas no-Colab."""
+    """Test _is_valid_output_path: filter paths outside Colab."""
 
     def make_orch(self, tmp_output_dir: Path) -> RenderOrchestrator:
         return RenderOrchestrator(
@@ -365,38 +365,44 @@ class TestValidateOutputPath:
         )
 
     def test_accepts_path_under_output_dir(self, tmp_output_dir: Path):
-        """Ruta bajo output_dir es valida."""
+        """A path under output_dir is valid."""
         orch = self.make_orch(tmp_output_dir)
         valid_path = tmp_output_dir / "Temp" / "beauty_0001.exr"
         assert orch._is_valid_output_path(valid_path)
 
     def test_accepts_path_direct_in_output_dir(self, tmp_output_dir: Path):
-        """Ruta directamente en output_dir es valida."""
+        """A path directly in output_dir is valid."""
         orch = self.make_orch(tmp_output_dir)
         valid_path = tmp_output_dir / "frame_00001.png"
         assert orch._is_valid_output_path(valid_path)
 
+    def test_rejects_path_traversal(self, tmp_output_dir: Path):
+        """Reject paths that escape output_dir through parent segments."""
+        orch = self.make_orch(tmp_output_dir)
+        bad_path = tmp_output_dir / ".." / "escaped" / "frame_000001.exr"
+        assert not orch._is_valid_output_path(bad_path)
+
     def test_rejects_windows_path(self, tmp_output_dir: Path):
-        """Ruta Windows C:\\... es rechazada."""
+        """A Windows path C:\\... is rejected."""
         orch = self.make_orch(tmp_output_dir)
         bad_path = Path("C:\\Users\\artista\\Documents\\file_name1frane.exr")
         assert not orch._is_valid_output_path(bad_path)
 
     def test_rejects_unrelated_path(self, tmp_output_dir: Path):
-        """Ruta fuera de output_dir es rechazada."""
+        """A path outside output_dir is rejected."""
         orch = self.make_orch(tmp_output_dir)
         bad_path = Path("/tmp/unrelated/file.exr")
         assert not orch._is_valid_output_path(bad_path)
 
     def test_rejects_root_path(self, tmp_output_dir: Path):
-        """Ruta absoluta fuera de todo es rechazada."""
+        """An absolute path outside managed output is rejected."""
         orch = self.make_orch(tmp_output_dir)
         bad_path = Path("/etc/passwd")
         assert not orch._is_valid_output_path(bad_path)
 
 
 class TestComputeSubdir:
-    """Prueba _compute_subdir: derivar subdirectorio del path."""
+    """Test _compute_subdir: derive the subdirectory from a path."""
 
     def make_orch(self, tmp_output_dir: Path) -> RenderOrchestrator:
         return RenderOrchestrator(
@@ -410,32 +416,32 @@ class TestComputeSubdir:
         )
 
     def test_file_in_subdirectory(self, tmp_output_dir: Path):
-        """Archivo en subdirectorio -> nombre del subdirectorio."""
+        """A nested file maps to its subdirectory name."""
         orch = self.make_orch(tmp_output_dir)
         path = tmp_output_dir / "Temp" / "beauty_0001.exr"
         assert orch._compute_subdir(path) == "Temp"
 
     def test_file_in_nested_subdirectory(self, tmp_output_dir: Path):
-        """Archivo en subdirectorio anidado -> ruta relativa completa."""
+        """A file in a nested subdirectory yields the complete relative path."""
         orch = self.make_orch(tmp_output_dir)
         path = tmp_output_dir / "Temp" / "beauty" / "beauty_0001.exr"
         assert orch._compute_subdir(path) == "Temp/beauty"
 
     def test_file_direct_in_output_dir(self, tmp_output_dir: Path):
-        """Archivo directamente en output_dir -> string vacio."""
+        """A file directly under output_dir maps to an empty subdirectory."""
         orch = self.make_orch(tmp_output_dir)
         path = tmp_output_dir / "frame_00001.png"
         assert orch._compute_subdir(path) == ""
 
     def test_file_outside_output_dir(self, tmp_output_dir: Path):
-        """Archivo fuera de output_dir -> string vacio."""
+        """A file outside output_dir maps to an empty subdirectory."""
         orch = self.make_orch(tmp_output_dir)
         path = Path("/tmp/unrelated/file.exr")
         assert orch._compute_subdir(path) == ""
 
 
 class TestOutputTarget(unittest.TestCase):
-    """Prueba el parametro output_target de RenderOrchestrator."""
+    """Test the RenderOrchestrator output_target parameter."""
 
     def test_default_output_target_is_drive(self) -> None:
         """Default output_target is 'drive'."""
@@ -482,7 +488,7 @@ class TestOutputTarget(unittest.TestCase):
 
 
 class TestFinalizeZipDownload(unittest.TestCase):
-    """Prueba _finalize_zip_download en modo zip_download."""
+    """Test _finalize_zip_download in zip_download mode."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -557,7 +563,7 @@ class TestFinalizeZipDownload(unittest.TestCase):
 
 
 class TestDriveBackendDispatch(unittest.TestCase):
-    """Prueba que drive_backend (opcional) se use en vez de drive_sync/state_manager."""
+    """Test that optional drive_backend replaces drive_sync/state_manager calls."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -595,7 +601,7 @@ class TestDriveBackendDispatch(unittest.TestCase):
 
         mock_upload.assert_called_once_with(local_file, orch.drive_output_dir, 1, "")
         mock_save_state.assert_called_once()
-        # save_state se llamo sin backend (None), el default
+        # save_state is called with the default backend value (None)
         self.assertIsNone(mock_save_state.call_args.kwargs.get("backend"))
 
     def test_upload_and_cleanup_uses_backend_when_provided(self) -> None:
@@ -607,24 +613,91 @@ class TestDriveBackendDispatch(unittest.TestCase):
         with patch("bcr.render_orchestrator.upload_frame") as mock_upload:
             orch._upload_and_cleanup(local_file, frame_num=1)
 
-        # el modulo drive_sync.upload_frame NO se llama cuando hay backend
+        # drive_sync.upload_frame is bypassed when a backend is supplied
         mock_upload.assert_not_called()
         backend.upload_frame.assert_called_once_with(local_file, orch.drive_output_dir, 1, "")
         backend.save_state.assert_called_once()
-        # el archivo local se borro igual, sin importar el backend
+        # the local file is still removed regardless of backend implementation
         self.assertFalse(local_file.exists())
 
     def test_upload_and_cleanup_catches_backend_error(self) -> None:
         from bcr.drive_backend import DriveBackendError
 
         backend = MagicMock()
-        backend.upload_frame.side_effect = DriveBackendError("carpeta no accesible")
+        backend.upload_frame.side_effect = DriveBackendError("folder is not accessible")
         orch = self._make_orch(drive_backend=backend)
         local_file = self._tmpdir / "frame_000001.png"
         local_file.write_bytes(b"x")
 
-        # no debe propagar la excepcion -- se atrapa y se loguea, igual que DriveSyncError
+        # the exception is logged rather than propagated, matching DriveSyncError behavior
         orch._upload_and_cleanup(local_file, frame_num=1)
 
-        # como fallo la subida, el archivo local NO se borra
+        # because the upload failed, the local file is not removed
         self.assertTrue(local_file.exists())
+
+
+class TestResumeOrchestration(unittest.TestCase):
+    """Exercise resume decisions without launching a real Blender process."""
+
+    def _orchestrator(self, frame_start: int, frame_end: int) -> RenderOrchestrator:
+        return RenderOrchestrator(
+            blender_path=Path("/blender"),
+            blend_file=Path("/scene.blend"),
+            output_dir=Path("/tmp/bcr-resume-test-output"),
+            drive_output_dir=Path("/drive/output"),
+            blender_scripts_dir=Path("/scripts"),
+            frame_start=frame_start,
+            frame_end=frame_end,
+            output_target="drive",
+        )
+
+    @patch("bcr.render_orchestrator.reconcile_with_files")
+    @patch("bcr.render_orchestrator.load_state", return_value=0)
+    @patch("bcr.render_orchestrator.subprocess.Popen")
+    def test_empty_range_starting_at_zero_does_not_skip_frame_zero(
+        self, mock_popen, _mock_load_state, mock_reconcile
+    ):
+        mock_reconcile.return_value = -1
+        process = MagicMock()
+        process.stdout = []
+        process.poll.return_value = 0
+        mock_popen.return_value = process
+
+        orch = self._orchestrator(0, 0)
+        orch.run()
+
+        mock_popen.assert_called_once()
+        command = mock_popen.call_args.args[0]
+        self.assertIn("--render-frame", command)
+        self.assertIn("0", command)
+
+    @patch("bcr.render_orchestrator.reconcile_with_files")
+    @patch("bcr.render_orchestrator.load_state", return_value=11)
+    @patch("bcr.render_orchestrator.subprocess.Popen")
+    def test_resume_starts_at_first_missing_frame_and_preserves_range(
+        self, mock_popen, _mock_load_state, mock_reconcile
+    ):
+        mock_reconcile.return_value = 11
+        process = MagicMock()
+        process.stdout = []
+        process.poll.return_value = 0
+        mock_popen.return_value = process
+
+        orch = self._orchestrator(10, 15)
+        orch.run()
+
+        command = mock_popen.call_args.args[0]
+        self.assertEqual(command[command.index("--frame-start") + 1], "12")
+        self.assertEqual(command[command.index("--frame-end") + 1], "15")
+        self.assertEqual(orch._requested_frame_start, 10)
+        self.assertEqual(orch._requested_total_frames, 6)
+
+    @patch("bcr.render_orchestrator.reconcile_with_files", return_value=5)
+    @patch("bcr.render_orchestrator.load_state", return_value=5)
+    @patch("bcr.render_orchestrator.subprocess.Popen")
+    def test_complete_range_does_not_launch_blender(
+        self, mock_popen, _mock_load_state, _mock_reconcile
+    ):
+        orch = self._orchestrator(1, 5)
+        orch.run()
+        mock_popen.assert_not_called()

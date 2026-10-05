@@ -1,17 +1,17 @@
-"""Script driver que se ejecuta DENTRO del Python embebido de Blender.
+"""Driver script executed INSIDE Blender's embedded Python runtime.
 
-Configura el dispositivo (GPU/CPU/OptiX) y el modo de salida (compositor/sequencer)
-antes de que comience el render.
+Configure the device (GPU/CPU/OptiX) and output mode (compositor/sequencer)
+before rendering begins.
 
-Usa SOLO la libreria estandar de Python + bpy. No importa nada del paquete src/bcr/
-porque Blender no tiene acceso a ese entorno pip.
+Use ONLY the Python standard library and bpy. Do not import from src/bcr/
+because Blender cannot access the notebook kernel's pip environment.
 
-Uso (desde linea de comandos de Blender):
+Usage (from the Blender command line):
     blender --background scene.blend --python render_frame_driver.py \\
         --render-output /tmp/frame_##### --render-anim -- \\
         --cycles-device OPTIX --output-mode compositor
 
-Los argumentos despues de -- se reciben en sys.argv.
+Arguments after -- are received in sys.argv.
 """
 
 import re
@@ -20,10 +20,10 @@ from pathlib import Path
 
 
 def main() -> None:
-    """Punto de entrada: configura y lanza el render."""
+    """Entry point: configure and launch the render."""
     import bpy
 
-    # Parsear argumentos personalizados (despues de --)
+    # Parse custom arguments (after --)
     device = "OPTIX"
     output_mode = "compositor"
 
@@ -33,12 +33,12 @@ def main() -> None:
     if args.get("output-mode"):
         output_mode = args["output-mode"]
 
-    # Determinar el directorio base limpio (sin patron # de Blender)
+    # Determine the clean base directory (without Blender's # pattern)
     if args.get("output-dir"):
-        # --output-dir tiene prioridad: ruta limpia explicitamente
+        # --output-dir takes precedence: explicit clean output path
         output_dir = args["output-dir"]
     elif args.get("render-output"):
-        # Fallback: derivar de --render-output quitando el patron #
+        # Fallback: derive from --render-output by removing the # pattern
         raw = args["render-output"]
         if re.search(r"#+", raw):
             output_dir = str(Path(raw).parent)
@@ -47,35 +47,40 @@ def main() -> None:
     else:
         output_dir = "/content/render_tmp"
 
-    # 1. Configurar dispositivo
+    # 1. Configure device
     _configure_device(device)
 
-    # 2. Configurar modo de salida (compositor vs sequencer)
+    # 2. Configure output mode and force the direct render path into the managed directory.
     _configure_output_mode(output_mode)
+    if output_mode == "sequencer":
+        bpy.context.scene.render.filepath = str(Path(output_dir) / "frame_######")
 
-    # 3. Remapear nodos File Output a una ruta Linux valida
+    # 3. Audit movie media before rendering so missing paths/codecs are visible in logs.
+    _audit_video_media()
+
+    # 4. Remap compositor File Output nodes into clean, managed output folders.
     _remap_file_output_nodes(output_dir, output_mode)
 
-    print(f"[driver] Dispositivo: {device}")
-    print(f"[driver] Modo de salida: {output_mode}")
-    print("[driver] Render listo para comenzar.")
+    print(f"[driver] Device: {device}")
+    print(f"[driver] Output mode: {output_mode}")
+    print("[driver] Render is ready to start.")
 
 
 def _parse_custom_args(argv: list[str]) -> dict[str, str]:
-    """Parsea argumentos --clave valor de sys.argv.
+    """Parse --key value arguments from sys.argv.
 
-    Blender pasa sus propios args primero; los nuestros llegan despues de --.
-    Buscamos especificamente --cycles-device, --output-mode, --output-dir
-    y --render-output.
+    Blender passes its own arguments first; ours arrive after --.
+    We specifically look for --cycles-device, --output-mode, --output-dir,
+    and --render-output.
     """
     result: dict[str, str] = {}
 
     i = 0
     while i < len(argv):
         if argv[i].startswith("--") and i + 1 < len(argv):
-            key = argv[i][2:]  # quitar --
+            key = argv[i][2:]  # strip leading --
             value = argv[i + 1]
-            # Solo nos interesan nuestros argumentos
+            # Only parse the arguments owned by this driver
             if key in (
                 "cycles-device",
                 "output-mode",
@@ -90,8 +95,44 @@ def _parse_custom_args(argv: list[str]) -> dict[str, str]:
     return result
 
 
+def _audit_video_media() -> None:
+    """Report video-media support, packing status, and unresolved paths."""
+    import bpy
+
+    ffmpeg_available = bool(getattr(bpy.app.build_options, "ffmpeg", False))
+    print(f"[media] Blender FFmpeg support: {ffmpeg_available}")
+    if not ffmpeg_available:
+        print("[media] WARNING: this Blender build has no FFmpeg support; video textures may fail.", file=sys.stderr)
+
+    checked = 0
+    for image in bpy.data.images:
+        if getattr(image, "source", "") != "MOVIE":
+            continue
+        checked += 1
+        packed = getattr(image, "packed_file", None) is not None
+        resolved = bpy.path.abspath(image.filepath, library=image.library)
+        exists = Path(resolved).is_file()
+        status = "packed" if packed else ("available on disk" if exists else "MISSING")
+        print(f"[media] Movie image {image.name!r}: {status}; path={resolved}")
+        if not packed and not exists:
+            print("[media] WARNING: movie media is not packed and its resolved path does not exist in this runtime.", file=sys.stderr)
+
+    for clip in bpy.data.movieclips:
+        checked += 1
+        resolved = bpy.path.abspath(clip.filepath, library=clip.library)
+        exists = Path(resolved).is_file()
+        packed = getattr(clip, "packed_file", None) is not None
+        status = "packed" if packed else ("available on disk" if exists else "MISSING")
+        print(f"[media] Movie clip {clip.name!r}: {status}; path={resolved}")
+        if not packed and not exists:
+            print("[media] WARNING: movie clip is not packed and its resolved path does not exist in this runtime.", file=sys.stderr)
+
+    if checked == 0:
+        print("[media] No movie textures or movie clips found.")
+
+
 def _configure_device(backend: str) -> None:
-    """Configura el dispositivo de render GPU/CPU/OptiX.
+    """Configure the GPU/CPU/OptiX render device.
 
     En background mode, Blender no puebla la lista de dispositivos
     automaticamente -- hay que llamar a get_devices() explicitamente.
@@ -107,14 +148,14 @@ def _configure_device(backend: str) -> None:
     if use_cpu:
         scene.cycles.device = "CPU"
         cprefs.compute_device_type = "NONE"
-        print("[driver] Dispositivo: CPU")
+        print("[driver] Device: CPU")
         return
 
-    # Extraer backend limpio (ej: "OPTIX+CPU" -> "OPTIX")
+    # Extract the base backend (e.g. "OPTIX+CPU" -> "OPTIX")
     clean_backend = backend.upper().replace("+CPU", "")
     cprefs.compute_device_type = clean_backend
 
-    # Obligatorio en background mode
+    # Required in background mode
     cprefs.get_devices()
 
     has_gpu = False
@@ -126,21 +167,21 @@ def _configure_device(backend: str) -> None:
 
     if has_gpu:
         scene.cycles.device = "GPU"
-        print(f"[driver] Dispositivo: GPU ({clean_backend})")
+        print(f"[driver] Device: GPU ({clean_backend})")
     else:
         scene.cycles.device = "CPU"
         cprefs.compute_device_type = "NONE"
         print(
-            f"[driver] ADVERTENCIA: no se detecto GPU ({clean_backend}), "
-            "se continua en CPU"
+            f"[driver] WARNING: no GPU detected ({clean_backend}); "
+            "continuing on CPU"
         )
 
 
 def _configure_output_mode(mode: str) -> None:
-    """Configura si el output usa el compositor o el sequencer.
+    """Configure whether output uses the compositor or sequencer.
 
     Args:
-        mode: 'compositor' o 'sequencer'
+        mode: 'compositor' or 'sequencer'
     """
     import bpy
 
@@ -154,11 +195,24 @@ def _configure_output_mode(mode: str) -> None:
         scene.render.use_sequencer = True
     else:
         print(
-            f"[driver] Modo de salida desconocido '{mode}', "
-            "usando compositor por defecto"
+            f"[driver] Unknown output mode '{mode}', "
+            "using compositor mode by default"
         )
         scene.render.use_compositing = True
         scene.render.use_sequencer = False
+
+
+
+def _unique_safe_node_name(node_name: str, used_names: set[str]) -> str:
+    """Return a filesystem-safe, unique folder name for a compositor node."""
+    base_name = re.sub(r"[^A-Za-z0-9_]+", "_", node_name).strip("_") or "compositor_output"
+    candidate = base_name
+    suffix = 2
+    while candidate.casefold() in used_names:
+        candidate = f"{base_name}_{suffix}"
+        suffix += 1
+    used_names.add(candidate.casefold())
+    return candidate
 
 
 def _remap_file_output_nodes(
@@ -169,58 +223,59 @@ def _remap_file_output_nodes(
 
     Los .blend suelen tener rutas absolutas del sistema local del artista
     (Windows: C:\\Users\\...). En Colab (Linux) esas rutas no funcionan.
-    Esta funcion reescribe directory de cada nodo File Output a una ruta
+    This function rewrites each File Output node's directory to a path
     valida en Linux.
 
-    Ademas, desactiva la salida directa del render (scene.render.filepath)
-    para que solo los File Output nodes generen archivos.
+    It also disables direct render output (scene.render.filepath)
+    so only File Output nodes generate files.
 
     Para nodos EXR Multilayer, preserva los nombres de item (que son nombres
     de capa dentro del .exr). Para nodos single-layer, agrega marcador de
     frame _###### a cada item.name.
 
     Args:
-        output_dir: Directorio base limpio (sin patron # de Blender) para
-            los archivos de salida de File Output nodes.
-        output_mode: Modo de salida ('compositor' o 'sequencer').
+        output_dir: Clean base directory (without Blender's # pattern) for
+            output files from File Output nodes.
+        output_mode: Output mode ('compositor' or 'sequencer').
     """
     import bpy
 
     scene = bpy.context.scene
 
-    # En modo sequencer no hay nodos de compositor que remapear
+    # In sequencer mode, there are no compositor nodes to remap
     if output_mode == "sequencer":
-        print("[driver] Modo sequencer: no se remapean File Output nodes")
+        print("[driver] Sequencer mode: File Output nodes are not remapped")
         return
 
-    # Guardar la ruta original (la que puso --render-output) por si
-    # no hay File Output nodes y tenemos que usarla como fallback.
+    # Save the original path (provided by --render-output) in case
+    # there are no File Output nodes, so use it as a fallback.
     original_filepath = scene.render.filepath
 
-    # Redirigir la salida directa del render a un directorio descartable
-    # para que no genere un archivo extra ademas de los File Output nodes.
+    # Redirect direct render output to a disposable directory
+    # to avoid generating an extra file in addition to File Output node output.
     scene.render.filepath = f"{output_dir}/_render_result_"
 
     # En Blender 5.0+, el arbol de nodos del compositor se accede mediante
-    # scene.compositing_node_group. scene.node_tree ya no existe como atributo.
+    # scene.compositing_node_group. scene.node_tree is no longer an attribute.
     node_tree = scene.compositing_node_group
 
     if node_tree is None:
         print(
-            "[driver] No hay node_tree de compositor disponible, "
-            "no se remapean File Outputs"
+            "[driver] No compositor node tree is available; "
+            "File Output nodes will not be remapped"
         )
         scene.render.filepath = original_filepath
         return
 
-    # Asegurar que el node tree tiene nodos (puede estar vacio)
+    # Ensure the node tree has nodes (it may be empty)
     if not node_tree.nodes:
-        print(f"[driver] Node tree vacio, no se remapean File Outputs")
+        print(f"[driver] Empty node tree; File Output nodes will not be remapped")
         scene.render.filepath = original_filepath
         return
 
     remapped = 0
     warn_no_slots = 0
+    used_node_names: set[str] = set()
     for node in node_tree.nodes:
         if node.type != "OUTPUT_FILE":
             continue
@@ -228,37 +283,31 @@ def _remap_file_output_nodes(
         node_name = node.name
         old_base = getattr(node, "directory", "")
 
-        # Limpiar la ruta original: eliminar prefijos Windows y normalizar
-        # P. ej. "C:\\Users\\..." -> "Users/...", "/tmp\\" -> "tmp"
-        cleaned = old_base.replace("\\", "/")
-        # Extraer solo la parte relativa (quitar C:/, etc.)
-        parts = [p for p in cleaned.split("/") if p and not p.endswith(":")]
-        suffix = "_".join(parts) if parts else node_name
-
-        new_base = f"{output_dir}/{suffix}"
+        # Clean the original path by removing Windows prefixes and normalizing it
+        # For example, "C:\\Users\\..." -> "Users/...", "/tmp\\" -> "tmp"
+        # Use the node name, never the artist workstation path, for output folders.
+        safe_node_name = _unique_safe_node_name(node_name, used_node_names)
+        new_base = str(Path(output_dir) / safe_node_name)
         node.directory = new_base
 
-        # Detectar si este nodo es EXR Multilayer.
-        # En nodos multilayer, file_output_items son nombres de capa dentro
-        # del .exr combinado, no nombres de archivo separados.
+        # Multilayer output stores layer names inside a single EXR file.
         is_multilayer = (
             getattr(node.format, "file_format", "") == "OPEN_EXR_MULTILAYER"
         )
-        safe_node_name = re.sub(r"[^A-Za-z0-9_]+", "_", node_name)
 
         if is_multilayer:
-            # En EXR multilayer, el marcador de frame va en file_name (que
-            # es la unica propiedad que determina el nombre fisico del
-            # archivo). item.name son capas internas y no se tocan.
+            # For multilayer EXR, the frame marker belongs in file_name (the
+            # only property that determines the physical filename
+            # file). item.name values are internal layers and are not modified.
             node.file_name = f"{safe_node_name}_######"
             print(
-                f"[driver] Nodo '{node_name}' es EXR multilayer, "
+                f"[driver] Node '{node_name}' is multilayer EXR, "
                 f"file_name -> '{node.file_name}' "
-                f"({len(node.file_output_items)} capas preservadas)"
+                f"({len(node.file_output_items)} layers preserved)"
             )
         else:
-            # En nodos single-layer, cada item es un archivo separado.
-            # file_name debe quedar vacio para no duplicar marcador.
+            # In single-layer nodes, each item is a separate file.
+            # file_name must remain empty to avoid duplicating the frame marker.
             node.file_name = ""
             for item in node.file_output_items:
                 item_name_clean = item.name.rstrip("_")
@@ -274,29 +323,28 @@ def _remap_file_output_nodes(
             warn_no_slots += 1
 
         print(
-            f"[driver] Nodo '{node_name}' remapeado: "
+            f"[driver] Node '{node_name}' remapped: "
             f"'{old_base}' -> '{new_base}'"
         )
 
     if remapped == 0:
-        # Restaurar la salida directa del render como fallback
+        # Restore direct render output as a fallback
         scene.render.filepath = original_filepath
         print(
-            "[driver] ERROR: No se encontraron nodos File Output en el compositor. "
-            "Verifique que el .blend tenga nodos File Output en el compositor "
-            "y que sean accesibles via scene.compositing_node_group.",
+            "[driver] ERROR: No File Output nodes were found in the compositor. "
+            "Ensure the .blend contains compositor File Output nodes "
+            "accessible through scene.compositing_node_group.",
             file=sys.stderr,
         )
         sys.exit(1)
     else:
         print(
-            f"[driver] {remapped} nodo(s) File Output remapeado(s) "
-            f"a {output_dir}/"
+            f"[driver] Remapped {remapped} File Output node(s) "
+            f"to {output_dir}/"
         )
         if warn_no_slots:
             print(
-                f"[driver] ADVERTENCIA: {warn_no_slots} nodo(s) "
-                "no tienen file_output_items"
+                f"[driver] WARNING: {warn_no_slots} node(s) have no file_output_items"
             )
 
 

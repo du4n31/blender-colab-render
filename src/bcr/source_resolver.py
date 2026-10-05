@@ -1,7 +1,7 @@
-"""Generaliza la adquisicion de archivos para Blender Colab Render.
+"""Generalize file acquisition for Blender Colab Render.
 
-Reemplaza link_resolver.py como capa de adquisicion externa.
-link_resolver.py se mantiene como detalle interno de la implementacion.
+Replaces link_resolver.py as the external acquisition layer.
+link_resolver.py remains an internal implementation detail.
 """
 
 import shutil
@@ -16,22 +16,22 @@ from bcr.config import CHUNK_SIZE, DOWNLOAD_TIMEOUT_SECONDS, DRIVE_MOUNT_POINT
 
 
 class SourceAcquisitionError(Exception):
-    """Error al adquirir o procesar un archivo."""
+    """Error raised while acquiring or processing a file."""
 
 
 def acquire_source(method: str, value: str, working_dir: Path) -> Path:
-    """Adquiere un archivo desde un enlace, subida de Colab o ruta de Drive.
+    """Acquire a file from a URL, Colab upload, or Drive path.
 
     Args:
         method: ``"link"``, ``"upload"`` o ``"drive_path"``.
-        value: URL, ruta en Drive, o ignorado para ``"upload"``.
-        working_dir: Directorio donde se almacenara el archivo.
+        value: URL or Drive path; ignored for ``"upload"``.
+        working_dir: Directory where the file will be stored.
 
     Returns:
-        Ruta resuelta al archivo adquirido.
+        Resolved path to the acquired file.
 
     Raises:
-        SourceAcquisitionError: si falla la adquisicion.
+        SourceAcquisitionError: if acquisition fails.
     """
     working_dir = Path(working_dir)
     working_dir.mkdir(parents=True, exist_ok=True)
@@ -43,19 +43,19 @@ def acquire_source(method: str, value: str, working_dir: Path) -> Path:
     if method == "drive_path":
         return _acquire_from_drive(value, working_dir)
 
-    msg = f"Metodo de adquisicion desconocido: '{method}'. Usa 'link', 'upload' o 'drive_path'."
+    msg = f"Unknown acquisition method: '{method}'. Use 'link', 'upload', or 'drive_path'."
     raise SourceAcquisitionError(msg)
 
 
 def _acquire_from_link(url: str, working_dir: Path) -> Path:
-    """Descarga un archivo desde una URL resuelta por link_resolver."""
+    """Download a file from a URL resolved by link_resolver."""
     try:
         direct_url = link_resolver.resolve_download_url(url)
     except link_resolver.LinkResolutionError as exc:
-        msg = f"Error al resolver URL '{url}': {exc}"
+        msg = f"Failed to resolve URL '{url}': {exc}"
         raise SourceAcquisitionError(msg) from exc
 
-    # Extraer nombre de archivo de la URL (ultimo segmento, sin query params)
+    # Extract the filename from the URL (last segment, without query parameters)
     filename = url.rstrip("/").split("/")[-1].split("?")[0]
     if not filename:
         filename = "downloaded_file"
@@ -66,7 +66,7 @@ def _acquire_from_link(url: str, working_dir: Path) -> Path:
         resp = requests.get(direct_url, stream=True, timeout=DOWNLOAD_TIMEOUT_SECONDS)
         resp.raise_for_status()
     except requests.RequestException as exc:
-        msg = f"Error al descargar '{direct_url}': {exc}"
+        msg = f"Failed to download '{direct_url}': {exc}"
         raise SourceAcquisitionError(msg) from exc
 
     with open(dest_path, "wb") as f:
@@ -78,23 +78,23 @@ def _acquire_from_link(url: str, working_dir: Path) -> Path:
 
 
 def _acquire_from_upload(working_dir: Path) -> Path:
-    """Sube un archivo via ``google.colab.files.upload()``.
+    """Upload a file through ``google.colab.files.upload()``.
 
-    NOTA: Esta funcion es **bloqueante** y requiere que el usuario seleccione
-    un archivo en el navegador de Colab. Solo funciona en Google Colab.
+    NOTE: This function is **blocking** and requires the user to select
+    a file through the Colab browser. Only works in Google Colab.
     """
     try:
         from google.colab import files  # type: ignore[import-untyped]
     except ImportError:
         msg = (
-            "El metodo 'upload' solo esta disponible en Google Colab. "
+            "The 'upload' method is only available in Google Colab. "
             "Usa 'link' o 'drive_path' en su lugar."
         )
         raise SourceAcquisitionError(msg) from None
 
     uploaded = files.upload()
     if not uploaded:
-        msg = "No se subio ningun archivo."
+        msg = "No file was uploaded."
         raise SourceAcquisitionError(msg)
 
     filename = next(iter(uploaded))
@@ -107,14 +107,14 @@ def _acquire_from_upload(working_dir: Path) -> Path:
 
 
 def _acquire_from_drive(value: str, working_dir: Path) -> Path:
-    """Copia un archivo desde Google Drive montado en ``/content/drive``.
+    """Copy a file from Google Drive mounted at ``/content/drive``.
 
-    ``value`` puede ser una ruta relativa al punto de montaje de Drive
+    ``value`` may be a path relative to the Drive mount point
     (p.ej. "MyDrive/escenas/mi_escena.blend", que es lo que el notebook
-    le pide al usuario) o una ruta absoluta ya dentro de el. Antes,
-    Path(value).resolve() resolvia las rutas relativas contra el
-    directorio de trabajo del proceso (p.ej. /content), no contra Drive,
-    asi que una ruta relativa "correcta" segun las instrucciones del
+    prompting the user) or an absolute path inside it. Before copying,
+    Path(value).resolve() used to resolve relative paths against the
+    the path must be resolved against the Drive mount, not the process working directory (e.g. /content),
+    because a relative path that looks correct according to the instructions
     notebook nunca se encontraba.
     """
     candidate = Path(value)
@@ -126,18 +126,18 @@ def _acquire_from_drive(value: str, working_dir: Path) -> Path:
     try:
         source.relative_to(drive_root)
     except ValueError:
-        msg = f"La ruta debe estar dentro de {drive_root}, got {source}"
+        msg = f"Path must be inside {drive_root}, got {source}"
         raise SourceAcquisitionError(msg) from None
 
     if not source.exists():
-        msg = f"El archivo no existe en Drive: {source}"
+        msg = f"File does not exist in Drive: {source}"
         raise SourceAcquisitionError(msg)
 
     dest_path = working_dir / source.name
     try:
         shutil.copy2(str(source), str(dest_path))
     except OSError as exc:
-        msg = f"Error al copiar '{source}' a '{dest_path}': {exc}"
+        msg = f"Failed to copy '{source}' to '{dest_path}': {exc}"
         raise SourceAcquisitionError(msg) from exc
 
     return dest_path.resolve()
@@ -148,23 +148,23 @@ def resolve_zip_contents(
     working_dir: Path,
     kind: str,
 ) -> Union[Path, list[Path]]:
-    """Extrae y resuelve el contenido de un archivo ZIP segun el tipo solicitado.
+    """Extract and resolve ZIP contents according to the requested type.
 
     Si ``local_path`` no tiene extension ``.zip`` se devuelve tal cual
     (como Path para ``kind="blend"`` o ``[Path]`` para ``kind="script"``).
 
     Args:
-        local_path: Ruta al archivo (puede ser .zip u otro).
-        working_dir: Directorio donde extraer el ZIP.
-        kind: ``"blend"`` para buscar archivos .blend,
-              ``"script"`` para buscar entry point .py.
+        local_path: Path to the file (may be a .zip archive or another type).
+        working_dir: Directory where the ZIP will be extracted.
+        kind: ``"blend"`` to find .blend files,
+              ``"script"`` to find the .py entry point.
 
     Returns:
-        Para ``"blend"``: Path al unico archivo .blend encontrado.
+        For ``"blend"``: path to the only .blend file found.
         Para ``"script"``: ``[entry_point_path, extracted_dir_path]``.
 
     Raises:
-        SourceAcquisitionError: si no se encuentra el contenido esperado
+        SourceAcquisitionError: if the expected content cannot be found
             o se detecta un intento de zip slip.
     """
     working_dir = Path(working_dir)
@@ -184,7 +184,7 @@ def resolve_zip_contents(
             _check_zip_slip(zf, extract_dir)
             zf.extractall(str(extract_dir))
     except zipfile.BadZipFile as exc:
-        msg = f"El archivo no es un ZIP valido: {local_path}"
+        msg = f"File is not a valid ZIP archive: {local_path}"
         raise SourceAcquisitionError(msg) from exc
 
     if kind == "blend":
@@ -192,60 +192,74 @@ def resolve_zip_contents(
     if kind == "script":
         return _resolve_script_in_dir(extract_dir)
 
-    msg = f"Tipo desconocido: '{kind}'. Usa 'blend' o 'script'."
+    msg = f"Unknown content type: '{kind}'. Use 'blend' or 'script'."
     raise SourceAcquisitionError(msg)
 
 
 def _check_zip_slip(zf: zipfile.ZipFile, extract_dir: Path) -> None:
-    """Verifica que ninguna entrada del ZIP intente escapar del directorio destino."""
+    """Verify that no ZIP entry attempts to escape the destination directory."""
     resolved_base = extract_dir.resolve()
     for member_name in zf.namelist():
         target_path = (extract_dir / member_name).resolve()
-        if not str(target_path).startswith(str(resolved_base)):
+        try:
+            target_path.relative_to(resolved_base)
+        except ValueError:
             msg = (
-                f"Zip slip detected: entry '{member_name}' "
-                "would extract outside target directory"
+                f"ZIP slip detected: entry '{member_name}' "
+                "would extract outside the target directory"
             )
             raise SourceAcquisitionError(msg)
 
 
 def _resolve_blend_in_dir(extract_dir: Path) -> Path:
-    """Busca un unico archivo .blend dentro del directorio extraido."""
+    """Find a single .blend file in the extracted directory."""
     blend_files = sorted(extract_dir.rglob("*.blend"))
 
     if len(blend_files) == 1:
         return blend_files[0].resolve()
 
     if len(blend_files) > 1:
-        disponibles = ", ".join(str(p) for p in blend_files)
+        available = ", ".join(str(p) for p in blend_files)
         msg = (
-            f"Se encontraron {len(blend_files)} archivos .blend, "
-            f"especifica cual usar: {disponibles}"
+            f"Found {len(blend_files)} .blend files; specify which one to use: "
+            f"{available}"
         )
         raise SourceAcquisitionError(msg)
 
-    msg = f"No se encontraron archivos .blend en {extract_dir}"
+    msg = f"No .blend files were found in {extract_dir}"
     raise SourceAcquisitionError(msg)
 
 
 def _resolve_script_in_dir(extract_dir: Path) -> list[Path]:
-    """Busca el entry point .py dentro del directorio extraido.
+    """Find the .py entry point in the extracted directory.
 
-    Si existe ``entry_point.txt`` usa su contenido como ruta relativa.
-    Si no, busca un unico archivo .py. Si hay multiples, pide
-    ``entry_point.txt`` via error.
+    If ``entry_point.txt`` exists, use its contents as a relative path.
+    Otherwise, find a single .py file. If multiple files exist, require
+    an ``entry_point.txt`` file and raise an actionable error.
     """
     entry_point_file = extract_dir / "entry_point.txt"
     if entry_point_file.exists():
         entry_rel = entry_point_file.read_text(encoding="utf-8").strip()
-        entry_path = (extract_dir / entry_rel).resolve()
+        resolved_root = extract_dir.resolve()
+        entry_path = (resolved_root / entry_rel).resolve()
+        try:
+            entry_path.relative_to(resolved_root)
+        except ValueError as exc:
+            msg = (
+                f"entry_point.txt points outside the extraction directory: "
+                f"'{entry_rel}'"
+            )
+            raise SourceAcquisitionError(msg) from exc
         if not entry_path.exists():
             msg = (
-                f"entry_point.txt senala a '{entry_rel}' "
-                f"pero no existe en {extract_dir}"
+                f"entry_point.txt points to '{entry_rel}' "
+                f"but it does not exist in {extract_dir}"
             )
             raise SourceAcquisitionError(msg)
-        return [entry_path, extract_dir.resolve()]
+        if not entry_path.is_file() or entry_path.suffix.lower() != ".py":
+            msg = f"entry_point.txt must point to an existing .py file: '{entry_rel}'"
+            raise SourceAcquisitionError(msg)
+        return [entry_path, resolved_root]
 
     py_files = sorted(extract_dir.rglob("*.py"))
     if len(py_files) == 1:
@@ -253,10 +267,10 @@ def _resolve_script_in_dir(extract_dir: Path) -> list[Path]:
 
     if len(py_files) > 1:
         msg = (
-            f"Se encontraron {len(py_files)} archivos .py en {extract_dir}. "
-            "Crea un archivo entry_point.txt con la ruta relativa al entry point."
+            f"Found {len(py_files)} .py files in {extract_dir}. "
+            "Create an entry_point.txt file containing the relative path to the entry point."
         )
         raise SourceAcquisitionError(msg)
 
-    msg = f"No se encontraron archivos .py en {extract_dir}"
+    msg = f"No .py files were found in {extract_dir}"
     raise SourceAcquisitionError(msg)

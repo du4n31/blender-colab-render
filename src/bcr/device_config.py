@@ -1,7 +1,7 @@
-"""Configuracion del dispositivo de render (GPU/CPU/OptiX) dentro de Blender.
+"""Configure the render device (GPU/CPU/OptiX) inside Blender.
 
-Este script esta disenado para ejecutarse DENTRO del Python embebido de Blender
-via blender --python device_config.py. Usa solo bpy + stdlib.
+This script is designed to run INSIDE Blender's embedded Python runtime
+via blender --python device_config.py. Uses only bpy + the standard library.
 """
 
 import sys
@@ -9,22 +9,22 @@ from typing import Optional
 
 
 def configure_device(backend: str) -> None:
-    """Configura el dispositivo de render para Cycles.
+    """Configure the render device for Cycles.
 
     Args:
         backend: 'CPU', 'CUDA', 'OPTIX', 'HIP', 'ONEAPI', o 'METAL'.
-                 Se puede anadir +CPU para usar ambos (ej: 'OPTIX+CPU').
+                 Append +CPU to use both (e.g. 'OPTIX+CPU').
 
     Returns:
-        None. Imprime advertencias si no se encuentra la GPU solicitada.
+        None. Prints warnings if the requested GPU is not found.
 
     Raises:
-        ImportError: si bpy no esta disponible.
+        ImportError: if bpy is unavailable.
     """
     try:
         import bpy
     except ImportError:
-        print("ERROR: bpy no esta disponible. Este script debe ejecutarse dentro de Blender.")
+        print("ERROR: bpy is unavailable. This script must run inside Blender.")
         sys.exit(1)
 
     scene = bpy.context.scene
@@ -36,14 +36,14 @@ def configure_device(backend: str) -> None:
     if use_cpu:
         scene.cycles.device = "CPU"
         cprefs.compute_device_type = "NONE"
-        print("[device_config] Dispositivo configurado: CPU")
+        print("[device_config] Device configured: CPU")
         return
 
-    # Extraer el backend limpio (ej: "OPTIX+CPU" -> "OPTIX")
+    # Extract the base backend (e.g. "OPTIX+CPU" -> "OPTIX")
     clean_backend = backend.upper().replace("+CPU", "")
     cprefs.compute_device_type = clean_backend
 
-    # Obligatorio en background mode: get_devices() puebla la lista
+    # Required in background mode: get_devices() populates the device list
     cprefs.get_devices()
 
     _enable_gpu_devices(cprefs, clean_backend)
@@ -64,25 +64,25 @@ def _enable_gpu_devices(cprefs, backend: str) -> None:
 
     if has_gpu:
         scene.cycles.device = "GPU"
-        print(f"[device_config] Dispositivo configurado: GPU ({backend})")
+        print(f"[device_config] Device configured: GPU ({backend})")
     else:
         scene.cycles.device = "CPU"
         cprefs.compute_device_type = "NONE"
         msg = (
-            f"ADVERTENCIA: no se detecto GPU ({backend}). "
-            "Se continua en CPU. Verifica que la T4 de Colab este disponible."
+            f"WARNING: requested GPU was not detected ({backend}). "
+            "Continuing on CPU. Verify that a Colab T4 GPU is available."
         )
         print(f"[device_config] {msg}")
 
 
 def parse_device_args(argv: list[str]) -> tuple[Optional[str], Optional[str]]:
-    """Parsea `--cycles-device` y `--output-mode` de sys.argv.
+    """Parse `--cycles-device` and `--output-mode` from sys.argv.
 
-    Los argumentos personalizados llegan despues de `--` en la linea de comandos
+    Custom arguments arrive after `--` on the command line
     de Blender.
 
     Returns:
-        (device, output_mode) donde ambos pueden ser None si no se especificaron.
+        (device, output_mode), either of which may be None if not specified.
     """
     device: Optional[str] = None
     output_mode: Optional[str] = None

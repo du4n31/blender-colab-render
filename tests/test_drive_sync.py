@@ -18,7 +18,7 @@ from bcr.drive_sync import (
 
 
 class TestUploadFrame(unittest.TestCase):
-    """Prueba upload_frame con y sin subdirectorio."""
+    """Test upload_frame with and without a subdirectory."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -29,7 +29,7 @@ class TestUploadFrame(unittest.TestCase):
         shutil.rmtree(str(self._tmpdir), ignore_errors=True)
 
     def test_upload_basic_preserves_name(self) -> None:
-        """Subida basica: archivo se copia con su nombre original."""
+        """Basic upload: preserve the original file name."""
         src = self._tmpdir / "beauty_0001.exr"
         src.write_text("fake-exr")
         result = upload_frame(src, self._drive, frame_num=1)
@@ -37,7 +37,7 @@ class TestUploadFrame(unittest.TestCase):
         self.assertTrue(result.exists())
 
     def test_upload_with_subdir_preserves_name(self) -> None:
-        """Subida con subdir: archivo se copia a subdirectorio con nombre original."""
+        """Subdirectory upload: preserve the original file name."""
         src = self._tmpdir / "beauty_0001.exr"
         src.write_text("fake-exr")
         result = upload_frame(src, self._drive, frame_num=1, subdir="Temp")
@@ -46,7 +46,7 @@ class TestUploadFrame(unittest.TestCase):
         self.assertTrue(result.exists())
 
     def test_upload_multiple_subdirs_no_collision(self) -> None:
-        """Multiples archivos mismo frame -> distintos subdirectorios, sin sobrescribir."""
+        """Multiple files for one frame use distinct subdirectories without overwriting."""
         src1 = self._tmpdir / "beauty_0001.exr"
         src1.write_text("beauty-data")
         src2 = self._tmpdir / "depth_0001.exr"
@@ -63,7 +63,7 @@ class TestUploadFrame(unittest.TestCase):
         self.assertEqual(r2.read_text(), "depth-data")
 
     def test_upload_no_source_file(self) -> None:
-        """Archivo local inexistente lanza DriveSyncError."""
+        """A missing local file raises DriveSyncError."""
         fake = Path("/tmp/nonexistent_file_12345.png")
         with self.assertRaises(DriveSyncError):
             upload_frame(fake, self._drive, frame_num=1)
@@ -85,7 +85,7 @@ class TestUploadFrame(unittest.TestCase):
         self.assertEqual(result.name, "frame_000042.exr")
 
     def test_defaults_to_png_when_no_extension(self) -> None:
-        """Archivo sin extension usa .png por defecto (solo con preserve_name=False)."""
+        """An extensionless file defaults to .png only when preserve_name=False."""
         src = self._tmpdir / "output"
         src.write_text("data")
         result = upload_frame(src, self._drive, frame_num=1, preserve_name=False)
@@ -94,22 +94,22 @@ class TestUploadFrame(unittest.TestCase):
 
 
 class TestRemoveLocal(unittest.TestCase):
-    """Prueba remove_local."""
+    """Test remove_local."""
 
     def test_removes_existing_file(self) -> None:
-        """Archivo existente se borra."""
+        """An existing file is removed."""
         f = Path(tempfile.mkstemp()[1])
         f.write_text("hello")
         remove_local(f)
         self.assertFalse(f.exists())
 
     def test_no_error_on_missing_file(self) -> None:
-        """Archivo inexistente no lanza error."""
+        """Removing a missing file does not raise an error."""
         remove_local(Path("/tmp/this_does_not_exist_12345.txt"))
 
 
 class TestListFramesInDrive(unittest.TestCase):
-    """Prueba list_frames_in_drive con deteccion recursiva."""
+    """Test recursive frame discovery in list_frames_in_drive."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -120,23 +120,23 @@ class TestListFramesInDrive(unittest.TestCase):
         shutil.rmtree(str(self._tmpdir), ignore_errors=True)
 
     def test_empty_directory(self) -> None:
-        """Directorio vacio devuelve lista vacia."""
+        """An empty directory returns an empty list."""
         self.assertEqual(list_frames_in_drive(self._drive), [])
 
     def test_detects_frames_in_root(self) -> None:
-        """Frames en la raiz son detectados."""
+        """Detect frames in the root directory."""
         (self._drive / "frame_000001.png").touch()
         (self._drive / "frame_000003.png").touch()
         self.assertEqual(list_frames_in_drive(self._drive), [1, 3])
 
     def test_detects_exr_frames(self) -> None:
-        """Frames .exr son detectados."""
+        """Detect .exr frames."""
         (self._drive / "frame_000001.exr").touch()
         (self._drive / "frame_000002.exr").touch()
         self.assertEqual(list_frames_in_drive(self._drive), [1, 2])
 
     def test_detects_frames_in_subdirectories(self) -> None:
-        """Frames en subdirectorios son detectados."""
+        """Detect frames in subdirectories."""
         subdir = self._drive / "Temp"
         subdir.mkdir()
         (subdir / "frame_000001.exr").touch()
@@ -144,14 +144,22 @@ class TestListFramesInDrive(unittest.TestCase):
         self.assertEqual(list_frames_in_drive(self._drive), [1, 2])
 
     def test_ignores_non_frame_files(self) -> None:
-        """Archivos que no son frame_* se ignoran."""
+        """Ignore files that are not rendered frames."""
         (self._drive / "frame_000001.png").touch()
         (self._drive / "README.txt").touch()
         (self._drive / "output.exr").touch()
         self.assertEqual(list_frames_in_drive(self._drive), [1])
 
+    def test_ignores_non_image_assets_with_six_digit_names(self) -> None:
+        """Scene files, scripts, and videos must not be mistaken for rendered frames."""
+        (self._drive / "frame_000001.png").touch()
+        (self._drive / "scene_000002.blend").touch()
+        (self._drive / "script_000003.py").touch()
+        (self._drive / "texture_000004.mp4").touch()
+        self.assertEqual(list_frames_in_drive(self._drive), [1])
+
     def test_mixed_subdirectories(self) -> None:
-        """Frames en multiples subdirectorios."""
+        """Detect frames across multiple subdirectories."""
         (self._drive / "frame_000001.png").touch()
         (self._drive / "beauty").mkdir()
         (self._drive / "beauty" / "frame_000002.exr").touch()
@@ -160,28 +168,28 @@ class TestListFramesInDrive(unittest.TestCase):
         self.assertEqual(list_frames_in_drive(self._drive), [1, 2, 3])
 
     def test_returns_sorted(self) -> None:
-        """Retorna frames ordenados."""
+        """Return sorted frame numbers."""
         (self._drive / "frame_000003.png").touch()
         (self._drive / "frame_000001.png").touch()
         (self._drive / "frame_000002.png").touch()
         self.assertEqual(list_frames_in_drive(self._drive), [1, 2, 3])
 
     def test_detects_single_layer_node_names(self) -> None:
-        """Nombres reales de nodo single-layer: Result_000001.exr."""
+        """Recognize actual single-layer node filenames such as Result_000001.exr."""
         (self._drive / "tmp").mkdir()
         (self._drive / "tmp" / "Result_000001.exr").touch()
         (self._drive / "tmp" / "Result_000002.exr").touch()
         self.assertEqual(list_frames_in_drive(self._drive), [1, 2])
 
     def test_detects_multilayer_node_names(self) -> None:
-        """Nombres reales de nodo multilayer: File_Output_001_000001.exr."""
+        """Recognize actual multilayer node filenames such as File_Output_001_000001.exr."""
         (self._drive / "salida").mkdir()
         (self._drive / "salida" / "File_Output_001_000001.exr").touch()
         (self._drive / "salida" / "File_Output_001_000005.exr").touch()
         self.assertEqual(list_frames_in_drive(self._drive), [1, 5])
 
     def test_detects_mixed_node_names_in_subdirs(self) -> None:
-        """Ambos nodos en subdirectorios distintos, mismo frame."""
+        """Recognize the same frame in different node subdirectories."""
         (self._drive / "tmp").mkdir()
         (self._drive / "salida").mkdir()
         (self._drive / "tmp" / "Result_000001.exr").touch()
@@ -189,12 +197,12 @@ class TestListFramesInDrive(unittest.TestCase):
         self.assertEqual(list_frames_in_drive(self._drive), [1])
 
     def test_five_digit_names_are_ignored(self) -> None:
-        """Nombres con 5 digitos (frame_00001) no se confunden con 6."""
+        """Do not confuse five-digit filenames (frame_00001) with six-digit frames."""
         (self._drive / "frame_00001.png").touch()
         self.assertEqual(list_frames_in_drive(self._drive), [])
 
     def test_ignores_non_frame_files_without_6_digits(self) -> None:
-        """Archivos que no tienen 6 digitos exactos se ignoran."""
+        """Ignore filenames without exactly six consecutive digits."""
         (self._drive / "Result_000001.exr").touch()
         (self._drive / "README.txt").touch()
         (self._drive / "output.exr").touch()

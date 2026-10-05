@@ -1,4 +1,4 @@
-"""Resuelve enlaces publicos de distintos proveedores a URLs de descarga directa."""
+"""Resolve public links from supported providers to direct-download URLs."""
 
 import re
 import urllib.parse
@@ -8,11 +8,11 @@ import requests
 
 
 class LinkResolutionError(Exception):
-    """Error al resolver un enlace de descarga."""
+    """Error raised while resolving a download link."""
 
 
 def resolve_download_url(url: str) -> str:
-    """Toma un enlace publico y devuelve la URL real de descarga.
+    """Convert a public link into its actual download URL.
 
     Soporta: enlaces directos, Dropbox, Google Drive, MediaFire.
     """
@@ -25,18 +25,18 @@ def resolve_download_url(url: str) -> str:
         return _resolve_google_drive(url)
     if "mediafire.com" in domain:
         return _resolve_mediafire(url)
-    # Enlace directo o proveedor desconocido
+    # Direct link or unknown provider
     if _is_direct_link(url):
         return url
-    msg = f"No se pudo resolver el enlace: proveedor no soportado ({domain})"
+    msg = f"Could not resolve link: unsupported provider ({domain})"
     raise LinkResolutionError(msg)
 
 
 def _is_direct_link(url: str) -> bool:
-    """Heuristica basica: enlaces que probablemente sirvan el archivo directamente."""
+    """Basic heuristic for links that likely serve the file directly."""
     parsed = urllib.parse.urlparse(url)
     path = parsed.path.lower()
-    # Extensiones de archivo tipicas
+    # Typical file extensions
     direct_extensions = (
         ".blend", ".zip", ".tar.gz", ".tar.xz", ".7z", ".rar",
         ".png", ".jpg", ".jpeg", ".exr", ".tga", ".bmp",
@@ -45,7 +45,7 @@ def _is_direct_link(url: str) -> bool:
 
 
 def _resolve_dropbox(url: str) -> str:
-    """Convierte enlace de Dropbox a descarga directa (?dl=0 -> ?dl=1)."""
+    """Convert a Dropbox link to a direct download URL (?dl=0 -> ?dl=1)."""
     parsed = urllib.parse.urlparse(url)
     query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
     # Forzar dl=1
@@ -55,11 +55,11 @@ def _resolve_dropbox(url: str) -> str:
 
 
 def _resolve_google_drive(url: str) -> str:
-    """Resuelve un enlace de Google Drive a URL de descarga directa.
+    """Resolve a Google Drive link to a direct download URL.
 
-    Usa gdown.parse_url() para extraer el file_id, luego construye la URL
-    de descarga directa. La descarga real se maneja con requests
-    (con el parametro de confirmacion para archivos grandes).
+    Use gdown.parse_url() to extract the file_id, then build the URL
+    for direct download. The actual download is handled by requests
+    (including the confirmation parameter for large files).
     """
     try:
         import gdown  # type: ignore[import-untyped]
@@ -69,7 +69,7 @@ def _resolve_google_drive(url: str) -> str:
         )
         raise LinkResolutionError(msg) from None
 
-    # Extraer file_id usando gdown o regex
+    # Extract file_id using gdown or a regular expression
     file_id = None
     try:
         parsed = gdown.parse_url(url)
@@ -82,10 +82,10 @@ def _resolve_google_drive(url: str) -> str:
         file_id = _extract_google_drive_id(url)
 
     if not file_id:
-        msg = f"No se pudo extraer file_id de la URL de Google Drive: {url}"
+        msg = f"Could not extract file_id from the Google Drive URL: {url}"
         raise LinkResolutionError(msg)
 
-    # URL de descarga directa con confirmacion
+    # Direct-download URL with confirmation
     return f"https://drive.google.com/uc?export=download&id={file_id}"
 
 
@@ -104,10 +104,10 @@ def _extract_google_drive_id(url: str) -> Optional[str]:
 
 
 def _resolve_mediafire(url: str) -> str:
-    """Extrae la URL real de descarga desde la pagina HTML de MediaFire.
+    """Extract the actual download URL from MediaFire's HTML page.
 
     Si la URL ya es un enlace directo (subdominio download*.mediafire.com),
-    se devuelve tal cual.
+    it is returned unchanged.
     """
     parsed = urllib.parse.urlparse(url)
     host = parsed.netloc.lower()
@@ -120,13 +120,13 @@ def _resolve_mediafire(url: str) -> str:
         resp = requests.get(url, timeout=30, allow_redirects=True)
         resp.raise_for_status()
     except requests.RequestException as exc:
-        msg = f"Error al descargar pagina de MediaFire: {exc}"
+        msg = f"Failed to download the MediaFire page: {exc}"
         raise LinkResolutionError(msg) from exc
 
     html = resp.text
 
-    # Buscar el enlace de descarga directa en el HTML
-    # patron 1: downloadButton[href]
+    # Find the direct-download link in the HTML
+    # pattern 1: downloadButton[href]
     match = re.search(
         r'<a[^>]*class="[^"]*download[^"]*"[^>]*href="([^"]+)"',
         html,
@@ -138,7 +138,7 @@ def _resolve_mediafire(url: str) -> str:
             url_str = "https:" + url_str
         return url_str
 
-    # patron 2: download_link en variable JS o data-*
+    # pattern 2: download_link en variable JS o data-*
     match = re.search(
         r'data-download-url=["\']([^"\']+)["\']',
         html,
@@ -146,10 +146,10 @@ def _resolve_mediafire(url: str) -> str:
     if match:
         return match.group(1).replace("\\/", "/")
 
-    # patron 3: kNO = "..."
+    # pattern 3: kNO = "..."
     match = re.search(r'kNO\s*=\s*["\']([^"\']+)["\']', html)
     if match:
         return match.group(1)
 
-    msg = "No se pudo extraer la URL de descarga de MediaFire"
+    msg = "Could not extract the MediaFire download URL"
     raise LinkResolutionError(msg)

@@ -1,40 +1,40 @@
-"""Sincronizacion de frames renderizados con Google Drive.
+"""Synchronize rendered frames with Google Drive.
 
-Drive se monta como sistema de archivos via google.colab.drive.mount(),
-por lo que 'subir' es una copia de archivo con shutil.
+Drive is mounted as a filesystem through google.colab.drive.mount(),
+so uploading is implemented as a file copy using shutil.
 """
 
 import os
 import shutil
 from pathlib import Path
 
-from bcr.config import DRIVE_MOUNT_POINT, extract_frame_number
+from bcr.config import DRIVE_MOUNT_POINT, RENDERED_IMAGE_EXTENSIONS, extract_frame_number
 
 
 class DriveSyncError(Exception):
-    """Error al sincronizar con Drive."""
+    """Error raised while synchronizing with Drive."""
 
 
 def ensure_drive_mounted() -> bool:
-    """Verifica que Google Drive esta montado en /content/drive.
+    """Check whether Google Drive is mounted at /content/drive.
 
     Returns:
-        True si esta montado, False en caso contrario.
+        True if mounted, otherwise False.
     """
     return DRIVE_MOUNT_POINT.exists() and any(DRIVE_MOUNT_POINT.iterdir())
 
 
 def ensure_output_dir(drive_path: Path) -> Path:
-    """Crea el directorio de salida en Drive si no existe.
+    """Create the Drive output directory if it does not exist.
 
     Args:
-        drive_path: Ruta completa dentro de Drive.
+        drive_path: Full path inside Drive.
 
     Returns:
-        Path al directorio de salida.
+        Path to the output directory.
 
     Raises:
-        DriveSyncError: si la ruta no esta bajo Drive.
+        DriveSyncError: if the path is outside Drive.
     """
     drive_path = Path(drive_path)
     _validate_drive_path(drive_path)
@@ -49,38 +49,38 @@ def upload_frame(
     subdir: str = "",
     preserve_name: bool = True,
 ) -> Path:
-    """Copia un frame renderizado desde la instancia a Drive.
+    """Copy a rendered frame from the runtime to Drive.
 
-    Si preserve_name=True (default), usa el nombre original del archivo
-    para evitar colisiones cuando hay multiples salidas por frame.
-    Si preserve_name=False, usa el patron frame_%06d.ext (compatibilidad).
+    If preserve_name=True (default), preserve the original filename
+    to avoid collisions when there are multiple outputs per frame.
+    If preserve_name=False, use the frame_%06d.ext pattern for compatibility.
 
     Args:
-        local_path: Ruta al archivo local del frame renderizado.
-        drive_output_dir: Directorio de salida en Drive.
-        frame_num: Numero de frame (para naming fallback).
-        subdir: Subdirectorio opcional (ej: nombre del nodo).
-        preserve_name: Si True, preserva el nombre original del archivo.
+        local_path: Local path to the rendered frame.
+        drive_output_dir: Drive output directory.
+        frame_num: Frame number (used for fallback naming).
+        subdir: Optional subdirectory (e.g. node name).
+        preserve_name: If True, preserve the original filename.
 
     Returns:
-        Path al archivo en Drive.
+        Path to the file in Drive.
 
     Raises:
-        DriveSyncError: si el archivo local no existe o falla la copia.
+        DriveSyncError: if the local file does not exist or copying fails.
     """
     local_path = Path(local_path)
     drive_output_dir = Path(drive_output_dir)
 
     if not local_path.exists():
-        msg = f"El archivo local no existe: {local_path}"
+        msg = f"Local file does not exist: {local_path}"
         raise DriveSyncError(msg)
 
     # Determinar nombre de destino
     if preserve_name:
-        # Usar nombre original para evitar colisiones
+        # Preserve the original name to avoid collisions
         dest_filename = local_path.name
     else:
-        # Fallback: patron frame_NNNNNN.ext
+        # Fallback: frame_NNNNNN.ext pattern
         suffix = local_path.suffix if local_path.suffix else ".png"
         dest_filename = f"frame_{frame_num:06d}{suffix}"
 
@@ -94,20 +94,20 @@ def upload_frame(
     try:
         shutil.copy2(str(local_path), str(dest_path))
     except OSError as exc:
-        msg = f"Error al copiar a Drive: {exc}"
+        msg = f"Failed to copy to Drive: {exc}"
         raise DriveSyncError(msg) from exc
 
     return dest_path
 
 
 def remove_local(local_path: Path) -> None:
-    """Borra un archivo local de la instancia.
+    """Delete a local file from the runtime.
 
     Args:
-        local_path: Ruta al archivo a borrar.
+        local_path: Path to the file to delete.
 
     Raises:
-        DriveSyncError: si no se puede borrar.
+        DriveSyncError: if the file cannot be deleted.
     """
     local_path = Path(local_path)
     if not local_path.exists():
@@ -115,22 +115,22 @@ def remove_local(local_path: Path) -> None:
     try:
         os.remove(str(local_path))
     except OSError as exc:
-        msg = f"Error al borrar archivo local {local_path}: {exc}"
+        msg = f"Failed to delete local file {local_path}: {exc}"
         raise DriveSyncError(msg) from exc
 
 
 def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
-    """Lista los numeros de frame subidos a Drive.
+    """List frame numbers uploaded to Drive.
 
-    Busca recursivamente en subdirectorios archivos cuyo nombre contenga
-    exactamente 6 digitos consecutivos (el numero de frame). No asume
-    un prefijo especifico como "frame_".
+    Recursively search subdirectories for files whose names contain
+    exactly six consecutive digits (the frame number). It does not assume
+    a specific prefix such as "frame_".
 
     Args:
-        drive_output_dir: Directorio de salida en Drive.
+        drive_output_dir: Drive output directory.
 
     Returns:
-        Lista ordenada de numeros de frame ya subidos (sin duplicados).
+        Sorted list of uploaded frame numbers (without duplicates).
     """
     drive_output_dir = Path(drive_output_dir)
     if not drive_output_dir.exists():
@@ -139,6 +139,8 @@ def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
     frames: list[int] = []
     for root, _dirs, files in os.walk(str(drive_output_dir)):
         for entry in files:
+            if Path(entry).suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                continue
             frame_num = extract_frame_number(entry)
             if frame_num is not None:
                 frames.append(frame_num)
@@ -146,9 +148,9 @@ def list_frames_in_drive(drive_output_dir: Path) -> list[int]:
 
 
 def _validate_drive_path(path: Path) -> None:
-    """Valida que la ruta este dentro de /content/drive."""
+    """Validate that the path is inside /content/drive."""
     try:
         path.resolve().relative_to(DRIVE_MOUNT_POINT.resolve())
     except ValueError:
-        msg = f"La ruta debe estar dentro de {DRIVE_MOUNT_POINT}, got {path}"
+        msg = f"Path must be inside {DRIVE_MOUNT_POINT}, got {path}"
         raise DriveSyncError(msg) from None

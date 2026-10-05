@@ -8,7 +8,7 @@ import pytest
 
 
 class TestPackageImports:
-    """Verifica que el paquete bcr se importa sin errores."""
+    """Verify that the bcr package imports without errors."""
 
     def test_import_config(self):
         from bcr import config
@@ -50,7 +50,7 @@ class TestPackageImports:
 
 
 class TestConfigValidation:
-    """Verifica las funciones de validacion de config."""
+    """Verify configuration validation helpers."""
 
     def test_validate_frame_range_valid(self):
         from bcr.config import validate_frame_range
@@ -82,3 +82,67 @@ class TestConfigValidation:
         # Simular que /content/drive existe
         # En testing sin Colab esto no funciona, verificamos que la funcion existe
         assert hasattr(validate_drive_path, "__call__")
+
+
+class TestNotebookSource:
+    """Guard notebook branch selection, English output, and centralized resume logic."""
+
+    def _notebook_code(self):
+        import json
+        from pathlib import Path
+
+        notebook_path = Path(__file__).resolve().parents[1] / "notebooks" / "blender_render.ipynb"
+        notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+        cells = notebook.get("cells", [])
+        code = "\\n".join(
+            "".join(cell.get("source", []))
+            for cell in cells
+            if cell.get("cell_type") == "code"
+        )
+        return code
+
+    def test_clone_uses_explicit_working_branch_without_token_in_url(self):
+        code = self._notebook_code()
+        assert 'BCR_GIT_BRANCH", "remake/reliable-resume-and-output"' in code
+        assert "GIT_ASKPASS" in code
+        assert "https://du4n31:{token}@" not in code
+
+    def test_resume_logic_is_owned_by_orchestrator(self):
+        code = self._notebook_code()
+        assert "load_state(" not in code
+        assert "reconcile_with_files(" not in code
+        assert "frame_start=frame_start," in code
+
+    def test_notebook_failure_messages_are_english(self):
+        code = self._notebook_code()
+        assert "Blender termino con codigo" not in code
+        assert "Error al clonar el repositorio" not in code
+
+    def test_notebook_code_cells_are_valid_python(self):
+        """Parse notebook code cells after excluding Colab shell and magic lines."""
+        import ast
+        import json
+        from pathlib import Path
+
+        notebook_path = Path(__file__).resolve().parents[1] / "notebooks" / "blender_render.ipynb"
+        notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
+        for index, cell in enumerate(notebook.get("cells", [])):
+            if cell.get("cell_type") != "code":
+                continue
+            source = "".join(cell.get("source", []))
+            python_lines = [
+                line for line in source.splitlines()
+                if not line.lstrip().startswith(("!", "%"))
+            ]
+            ast.parse("\n".join(python_lines), filename=f"notebook-cell-{index}")
+
+    def test_render_output_is_separate_from_temporary_assets(self):
+        """Rendered images and ZIP exports must not include scene/script inputs."""
+        code = self._notebook_code()
+        from pathlib import Path
+
+        config_path = Path(__file__).resolve().parents[1] / "src" / "bcr" / "config.py"
+        config = config_path.read_text(encoding="utf-8")
+        assert 'RENDER_OUTPUT_DIR = Path("/content/render_output")' in config
+        assert "output_dir=RENDER_OUTPUT_DIR" in code
+        assert "RENDER_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)" in code

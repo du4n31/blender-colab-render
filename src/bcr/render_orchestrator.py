@@ -1,8 +1,8 @@
-"""Orquestador del proceso de render.
+"""Render process orchestrator.
 
-Lanza Blender como subproceso no bloqueante, lee su stdout en tiempo real,
-y para cada frame detectado lo sube a Drive en un hilo separado mientras
-Blender renderiza el siguiente.
+Launches Blender as a subprocess, reads stdout in real time,
+and uploads each detected frame to Drive on a separate thread while
+Blender renders the next frame.
 """
 
 import os
@@ -15,15 +15,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from bcr.config import BACKLOG_LIMIT, RENDER_OUTPUT_PATTERN, extract_frame_number
+from bcr.config import BACKLOG_LIMIT, RENDERED_IMAGE_EXTENSIONS, RENDER_OUTPUT_PATTERN, extract_frame_number
 from bcr.drive_backend import DriveBackendError
 from bcr.drive_sync import DriveSyncError, remove_local, upload_frame
 from bcr.local_export import LocalExportError, check_disk_space, package_output, trigger_download
-from bcr.state_manager import reconcile_with_files, save_state
+from bcr.state_manager import load_state, reconcile_with_files, save_state
 
 
 class RenderError(Exception):
-    """Error durante el proceso de render."""
+    """Error during the render process."""
 
 
 # Callback type for progress updates
@@ -41,7 +41,7 @@ ProgressCallback = Callable[
 
 
 class RenderOrchestrator:
-    """Orquesta el proceso completo de render."""
+    """Orchestrate the complete render job."""
 
     def __init__(
         self,
@@ -66,18 +66,21 @@ class RenderOrchestrator:
         self.blender_scripts_dir = Path(blender_scripts_dir)
         self.frame_start = frame_start
         self.frame_end = frame_end
+        self._requested_frame_start = frame_start
+        self._requested_frame_end = frame_end
+        self._requested_total_frames = frame_end - frame_start + 1
         self.device = device
         self.output_mode = output_mode
         self.output_target = output_target
         self.custom_script_paths = custom_script_paths or []
         self.progress_callback = progress_callback
-        # Backend opcional de Drive (ej. ServiceAccountDriveBackend). Si es
-        # None (default), la subida y el guardado de estado usan el
-        # filesystem montado exactamente como antes -- ver _dispatch_upload
+        # Optional Drive backend (e.g. ServiceAccountDriveBackend). If
+        # If None (default), frame uploads and state persistence use the
+        # mounted filesystem as before; see _dispatch_upload
         # y _dispatch_save_state.
         self.drive_backend = drive_backend
 
-        # Estado interno
+        # Internal state
         self._process: Optional[subprocess.Popen] = None
         self._current_frame = 0
         self._frame_times: list[float] = []
@@ -89,18 +92,18 @@ class RenderOrchestrator:
         self._uploaded_paths: set[str] = set()
 
     # ------------------------------------------------------------------
-    # Construccion del comando
+    # Command construction
     # ------------------------------------------------------------------
 
     def build_command(self) -> list[str]:
-        """Construye la lista de argumentos para Blender en el ORDEN correcto.
+        """Build the Blender argument list in the correct order.
 
-        El orden critical (ver docs de Blender):
+        Critical ordering (see Blender CLI documentation):
             1. --background
-            2. archivo .blend  (despues del .blend, --render-output no se sobreescribe)
+            2. blend file (after the .blend file, --render-output is not overwritten)
             3. motor, python scripts, output
-            4. render trigger (--render-anim o --render-frame) AL FINAL
-            5. -- seguido de opciones de Cycles
+            4. render trigger (--render-anim or --render-frame)  # LAST
+            5. -- followed by Cycles options
         """
         cmd: list[str] = [
             str(self.blender_path),
@@ -113,20 +116,20 @@ class RenderOrchestrator:
         driver_script = self.blender_scripts_dir / "render_frame_driver.py"
         cmd.extend(["--python", str(driver_script)])
 
-        # Scripts personalizados adicionales
+        # Additional custom scripts
         for script_path in self.custom_script_paths:
             cmd.extend(["--python", str(script_path)])
 
-        # Output: usar directorio descartable para la salida directa del render.
-        # Los File Output nodes del compositor son remapeados por el driver
+        # Use a disposable directory for direct render output.
+        # Compositor File Output nodes are remapped by the driver
         # (render_frame_driver.py -> _remap_file_output_nodes()).
         output_pattern = str(self.output_dir / RENDER_OUTPUT_PATTERN)
         cmd.extend(["--render-output", output_pattern])
 
-        # Audio desactivado (por defecto en background mode, pero explicito no duele)
+        # Disable audio (normally off in background mode, but be explicit).
         cmd.append("-noaudio")
 
-        # Rango de frames y trigger de render
+        # Frame range and render trigger
         total_frames = self.frame_end - self.frame_start + 1
         if total_frames == 1:
             cmd.extend(["--render-frame", str(self.frame_start)])
@@ -135,7 +138,7 @@ class RenderOrchestrator:
             cmd.extend(["--frame-end", str(self.frame_end)])
             cmd.append("--render-anim")
 
-        # Opciones de Cycles (despues de --)
+        # Cycles options (after --)
         cmd.append("--")
         cmd.extend(["--cycles-device", self.device])
         cmd.extend(["--output-mode", self.output_mode])
@@ -144,25 +147,42 @@ class RenderOrchestrator:
         return cmd
 
     # ------------------------------------------------------------------
-    # Ejecucion
+    # Execution
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        """Ejecuta el proceso de render completo.
+        """Run the complete render process.
 
-        Lanza Blender como subproceso, monitoriza stdout en tiempo real,
-        y segun ``output_target`` sube frames a Drive incrementalmente
-        o los mantiene locales para empaquetar al final.
+        Launch Blender as a subprocess and monitor stdout in real time,
+        uploading frames to Drive incrementally according to ``output_target``
+        or keep them local for packaging at the end.
         """
         if self.output_target == "zip_download":
             ok, msg = check_disk_space(self.output_dir)
             if not ok:
-                print(f"[orchestrator] ADVERTENCIA: {msg}", file=sys.stderr)
-
-        cmd = self.build_command()
-        print(f"[orchestrator] Comando: {' '.join(cmd)}")
+                print(f"[orchestrator] WARNING: {msg}", file=sys.stderr)
 
         total_frames = self.frame_end - self.frame_start + 1
+
+        # Resume from durable Drive output, not from the state file alone.
+        # Reconcile the checkpoint against files actually present in storage.
+        if self.output_target == "drive":
+            saved_frame = load_state(
+                self.drive_output_dir, total_frames, backend=self.drive_backend
+            )
+            confirmed_frame = reconcile_with_files(
+                self.drive_output_dir, saved_frame, backend=self.drive_backend,
+                frame_start=self.frame_start
+            )
+            if confirmed_frame >= self.frame_start:
+                if confirmed_frame >= self.frame_end:
+                    print("[orchestrator] All requested frames are already present; nothing to render.")
+                    return
+                self.frame_start = confirmed_frame + 1
+                print(f"[orchestrator] Resuming from frame {self.frame_start} (frame {confirmed_frame} is confirmed).")
+
+        cmd = self.build_command()
+        print(f"[orchestrator] Command: {' '.join(cmd)}")
 
         try:
             self._process = subprocess.Popen(
@@ -173,36 +193,38 @@ class RenderOrchestrator:
                 bufsize=1,
             )
         except OSError as exc:
-            msg = f"Error al lanzar Blender: {exc}"
+            msg = f"Failed to launch Blender: {exc}"
             raise RenderError(msg) from exc
 
         self._current_frame = 0
-        self._uploaded_paths: set[str] = set()  # rutas ya procesadas
+        self._uploaded_paths: set[str] = set()  # paths already processed
         upload_pool = ThreadPoolExecutor(max_workers=2)
 
         try:
             for line in self._process.stdout or []:
                 line = line.rstrip("\n")
-                print(line, file=sys.stderr)  # re-enviar a stderr para visibilidad
+                print(line, file=sys.stderr)  # Forward to stderr for visibility
 
-                # Detectar frames completados (usa la ruta exacta de Blender)
+                # Detect completed frames using the exact path reported by Blender
                 result = self._parse_saved_line(line)
                 if result is not None:
                     frame_num, local_path = result
 
-                    # Validar que la ruta esta bajo nuestro output_dir (filtra
+                    # Validate that the path is under output_dir (filters
                     # paths Windows como C:\Users\... que Blender imprime
-                    # si los File Output nodes no fueron remapeados).
+                    # if File Output nodes were not remapped).
                     if not self._is_valid_output_path(local_path):
                         continue
+                    if local_path.suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                        continue
 
-                    # Saltar si ya procesamos esta ruta exacta
+                    # Skip this path if it has already been processed
                     path_key = str(local_path)
                     if path_key in self._uploaded_paths:
                         continue
                     self._uploaded_paths.add(path_key)
 
-                    # Actualizar metricas solo cuando cambia el frame
+                    # Update metrics only when the frame changes
                     if frame_num != self._current_frame:
                         self._current_frame = frame_num
                         now = time.time()
@@ -210,7 +232,7 @@ class RenderOrchestrator:
                         self._update_metrics()
 
                     if self.output_target == "drive":
-                        # Encolar subida a Drive (en paralelo con el render)
+                        # Queue upload to Drive (in parallel with rendering)
                         if local_path.exists():
                             self._pending_frames.add(frame_num)
                             subdir = self._compute_subdir(local_path)
@@ -222,25 +244,25 @@ class RenderOrchestrator:
                             )
                             self._upload_futures.append(future)
                     elif self.output_target == "zip_download":
-                        # En modo zip_download los frames se quedan en disco
+                        # In zip_download mode, frames remain on disk
                         pass
 
-                    # Verificar backlog (solo en modo drive)
+                    # Check the upload backlog (Drive mode only)
                     if self.output_target == "drive":
                         self._wait_if_backlogged()
 
-            # Esperar a que terminen todas las subidas (modo drive)
+            # Wait for all uploads to finish (Drive mode)
             for future in as_completed(self._upload_futures):
                 try:
                     future.result()
                 except Exception as exc:
-                    print(f"[orchestrator] Error en subida: {exc}", file=sys.stderr)
+                    print(f"[orchestrator] Upload error: {exc}", file=sys.stderr)
 
         finally:
             upload_pool.shutdown(wait=True)
             self._cleanup_process()
 
-        # Finalizar segun modo
+        # Finalize according to output mode
         if self.output_target == "drive":
             self._reconcile_pending()
         elif self.output_target == "zip_download":
@@ -256,22 +278,22 @@ class RenderOrchestrator:
     ) -> Optional[tuple[int, Path]]:
         """Detecta lineas 'Saved: '<ruta>'' y extrae (frame, ruta_exacta).
 
-        Blender imprime lineas como:
+        Blender prints lines such as:
             Saved: '/content/render_tmp/Result_000001.exr'
             Saved: '/content/render_tmp/File_Output_001_000001.exr'
             Time: 00:00.53 (Saving: 00:00.08)
 
-        El numero de frame se extrae como bloque de exactamente 6 digitos
-        en cualquier posicion del nombre (no solo antes de la extension).
-        Esto cubre tanto nodos single-layer (item.name + ######) como
+        The frame number is extracted as a block of exactly six digits
+        anywhere in the filename (not only before the extension).
+        This covers both single-layer nodes (item.name + ######) and
         nodos multilayer (file_name + ######).
 
-        Ignora archivos descartables (_discard_, _render_result_) que
-        son la salida directa del render (no de File Output nodes).
+        Ignore disposable files (_discard_, _render_result_) that
+        are direct render output (not File Output node output).
 
         Returns:
-            tuple (int, Path) con numero de frame y ruta exacta,
-            o None si no se pudo extraer o es descartable.
+            tuple (int, Path) containing the frame number and exact path,
+            or None if extraction fails or the file is disposable.
         """
         match = re.search(r"Saved:\s*'([^']+)'", line)
         if not match:
@@ -279,8 +301,8 @@ class RenderOrchestrator:
 
         path_str = match.group(1)
 
-        # Ignorar archivos descartables (salida directa del render,
-        # no de File Output nodes).
+        # Ignore disposable files (direct render output,
+        # not File Output node output).
         if "_discard_" in path_str or "_render_result_" in path_str:
             return None
 
@@ -292,33 +314,32 @@ class RenderOrchestrator:
         return None
 
     def _is_valid_output_path(self, path: Path) -> bool:
-        """Valida que la ruta este bajo nuestro directorio de salida controlado.
+        r"""Validate that a path is inside the managed output directory.
 
-        Descarta rutas Windows (C:\...), rutas arbitrarias fuera de
-        /content/render_tmp, etc. que Blender podria imprimir si los
-        File Output nodes no fueron remapeados correctamente.
+        Reject Windows paths (C:\\...), arbitrary paths outside output_dir,
+        and files from compositor nodes that were not remapped correctly.
         """
         try:
-            path.relative_to(self.output_dir)
+            path.resolve().relative_to(self.output_dir.resolve())
             return True
         except ValueError:
             return False
 
     def _compute_subdir(self, path: Path) -> str:
-        """Deriva el subdirectorio relativo para organizar en Drive.
+        """Derive the relative subdirectory used to organize output in Drive.
 
-        Si el archivo esta en output_dir/subdir/archivo.ext, retorna
-        'subdir' (el nodo que lo produjo). Si esta directamente en
-        output_dir, retorna '' (raiz).
+        If a file is in output_dir/subdir/file.ext, return
+        'subdir' (the node that produced it). If it is directly in
+        output_dir, return '' (the root).
 
         Ejemplos:
             path=/content/render_tmp/Temp/beauty_0001.exr
             output_dir=/content/render_tmp
-            -> retorna 'Temp'
+            -> return 'Temp'
 
             path=/content/render_tmp/frame_00001.png
             output_dir=/content/render_tmp
-            -> retorna ''
+            -> return ''
         """
         try:
             rel = path.relative_to(self.output_dir)
@@ -328,9 +349,9 @@ class RenderOrchestrator:
             return ""
 
     def _find_frame_file(self, frame_num: int) -> Optional[Path]:
-        """Busca el archivo de frame renderizado en el directorio temporal.
+        """Find the rendered frame file in the temporary directory.
 
-        Busca cualquier archivo cuyo nombre contenga exactamente 6 digitos
+        Find any file whose name contains exactly six digits
         que coincidan con frame_num.
         """
         if not self.output_dir.exists():
@@ -339,8 +360,10 @@ class RenderOrchestrator:
         for f in self.output_dir.rglob("*"):
             if not f.is_file():
                 continue
+            if f.suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                continue
             name = f.name
-            # Ignorar descartables
+            # Ignore disposable files
             if name.startswith("_discard") or name.startswith("_render_result"):
                 continue
             nf = extract_frame_number(name)
@@ -350,18 +373,18 @@ class RenderOrchestrator:
         return None
 
     # ------------------------------------------------------------------
-    # Subida a Drive
+    # Drive uploads
     # ------------------------------------------------------------------
 
     def _dispatch_upload(self, local_path: Path, frame_num: int, subdir: str = "") -> None:
-        """Sube un frame usando el backend activo (API) o drive_sync (montado)."""
+        """Upload a frame using the active backend (API) or mounted Drive sync."""
         if self.drive_backend is not None:
             self.drive_backend.upload_frame(local_path, self.drive_output_dir, frame_num, subdir)
         else:
             upload_frame(local_path, self.drive_output_dir, frame_num, subdir)
 
     def _dispatch_save_state(self, last_frame: int, total_frames: int) -> None:
-        """Guarda el estado usando el backend activo (API) o state_manager (montado)."""
+        """Save state using the active backend (API) or state_manager (mounted Drive)."""
         save_state(self.drive_output_dir, last_frame, total_frames, backend=self.drive_backend)
 
     def _upload_and_cleanup(
@@ -370,55 +393,55 @@ class RenderOrchestrator:
         frame_num: int,
         subdir: str = "",
     ) -> None:
-        """Sube un frame a Drive y lo borra localmente.
+        """Upload a frame to Drive and remove its local copy.
 
         Args:
-            local_path: Ruta local al archivo renderizado.
-            frame_num: Numero de frame.
-            subdir: Subdirectorio en Drive para organizar multiples
-                salidas (ej: nombre del nodo File Output).
+            local_path: Local path to the rendered file.
+            frame_num: Frame number.
+            subdir: Drive subdirectory used to organize multiple
+                outputs (e.g. a File Output node name).
         """
         try:
             self._dispatch_upload(local_path, frame_num, subdir)
             remove_local(local_path)
-            # Actualizar estado en Drive
+            # Update state in Drive
             self._dispatch_save_state(
                 frame_num,
-                self.frame_end - self.frame_start + 1,
+                self._requested_total_frames,
             )
             self._pending_frames.discard(frame_num)
         except (DriveSyncError, DriveBackendError) as exc:
             print(
-                f"[orchestrator] Error al subir frame {frame_num}: {exc}",
+                f"[orchestrator] Failed to upload frame {frame_num}: {exc}",
                 file=sys.stderr,
             )
 
     def _wait_if_backlogged(self) -> None:
-        """Espera a que la cola de subida baje del limite si hay backlog."""
+        """Wait for the upload queue to fall below the limit when backlogged."""
         while len(self._pending_frames) >= BACKLOG_LIMIT:
             print(
-                f"[orchestrator] Backlog de subida ({len(self._pending_frames)}), "
-                "esperando...",
+                f"[orchestrator] Upload backlog ({len(self._pending_frames)}), "
+                "waiting...",
                 file=sys.stderr,
             )
             time.sleep(2)
 
     # ------------------------------------------------------------------
-    # Metricas
+    # Metrics
     # ------------------------------------------------------------------
 
     def _update_metrics(self) -> None:
-        """Actualiza metricas de tiempo y notifica al callback."""
+        """Update timing metrics and notify the callback."""
         if len(self._frame_times) < 2:
             return
 
-        # Tiempo del ultimo frame (diferencia entre detecciones consecutivas)
+        # Last-frame duration (difference between consecutive detections)
         if len(self._frame_times) >= 2:
             self._last_time = self._frame_times[-1] - self._frame_times[-2]
         else:
             self._last_time = None
 
-        # Tiempo promedio desde el segundo frame en adelante
+        # Average frame duration, starting with the second frame
         if len(self._frame_times) >= 2:
             diffs = [
                 self._frame_times[i] - self._frame_times[i - 1]
@@ -428,16 +451,16 @@ class RenderOrchestrator:
         else:
             self._avg_time = None
 
-        # Notificar
+        # Notify
         if self.progress_callback:
-            remaining = (self.frame_end - self.frame_start + 1) - self._current_frame
+            remaining = self._requested_frame_end - self._current_frame
             eta = None
             if self._avg_time and self._avg_time > 0:
                 eta = timedelta(seconds=int(self._avg_time * remaining))
 
             self.progress_callback(
-                frame=self._current_frame - self.frame_start + 1,
-                total=self.frame_end - self.frame_start + 1,
+                frame=self._current_frame - self._requested_frame_start + 1,
+                total=self._requested_total_frames,
                 last_time=self._last_time,
                 avg_time=self._avg_time,
                 eta=eta,
@@ -445,72 +468,76 @@ class RenderOrchestrator:
             )
 
     # ------------------------------------------------------------------
-    # Finalizacion zip_download
+    # zip_download finalization
     # ------------------------------------------------------------------
 
     def _finalize_zip_download(self) -> None:
-        """Empaqueta y descarga el output completo como .zip en modo zip_download."""
-        print("[orchestrator] Empaquetando resultado como .zip...", file=sys.stderr)
+        """Package and download all output as a .zip in zip_download mode."""
+        print("[orchestrator] Packaging output as .zip...", file=sys.stderr)
         if not self.output_dir.exists():
             print(
-                f"[orchestrator] No hay directorio de salida: {self.output_dir}",
+                f"[orchestrator] Output directory does not exist: {self.output_dir}",
                 file=sys.stderr,
             )
             return
         try:
             zip_path = package_output(self.output_dir)
             print(
-                f"[orchestrator] .zip creado: {zip_path} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)",
+                f"[orchestrator] .zip created: {zip_path} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)",
                 file=sys.stderr,
             )
             trigger_download(zip_path)
         except LocalExportError as exc:
             print(
-                f"[orchestrator] Error al empaquetar: {exc}",
+                f"[orchestrator] Packaging error: {exc}",
                 file=sys.stderr,
             )
 
     # ------------------------------------------------------------------
-    # Reconciliacion y limpieza
+    # Reconciliation and cleanup
     # ------------------------------------------------------------------
 
     def _reconcile_pending(self) -> None:
-        """Al finalizar (o si el proceso se cae), sube frames pendientes."""
+        """Upload pending frames at completion or after a process failure."""
         if self._reconcile_done:
             return
         self._reconcile_done = True
 
-        print("[orchestrator] Reconciliando frames pendientes...", file=sys.stderr)
+        print("[orchestrator] Reconciling pending frames...", file=sys.stderr)
 
-        # Subir frames locales que no se hayan subido
-        # Usa rglob para encontrar archivos en subdirectorios (los File Output
-        # nodes remapeados pueden crear subdirectorios en output_dir).
+        # Upload any local frames that have not yet been uploaded
+        # Use rglob to find files in subdirectories (File Output
+        # remapped nodes can create subdirectories under output_dir).
         if self.output_dir.exists():
             for f in sorted(self.output_dir.rglob("*")):
                 if not f.is_file():
                     continue
-                # Saltar descartables
+                if f.suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                    continue
+                # Skip disposable files
                 if f.name.startswith("_discard") or f.name.startswith("_render_result"):
                     continue
                 frame_num = extract_frame_number(f.name)
                 if frame_num is None:
+                    continue
+                if not self._requested_frame_start <= frame_num <= self._requested_frame_end:
                     continue
                 try:
                     subdir = self._compute_subdir(f)
                     self._dispatch_upload(f, frame_num, subdir)
                     remove_local(f)
                     print(
-                        f"[orchestrator] Frame {frame_num} recuperado y subido: {f.name}",
+                        f"[orchestrator] Frame {frame_num} recovered and uploaded: {f.name}",
                         file=sys.stderr,
                     )
                 except (DriveSyncError, DriveBackendError) as exc:
                     print(
-                        f"[orchestrator] Error en reconciliacion: {exc}",
+                        f"[orchestrator] Reconciliation error: {exc}",
                         file=sys.stderr,
                     )
 
     def _cleanup_process(self) -> None:
-        """Limpia el proceso de Blender si sigue vivo."""
+        """Clean up the Blender process if it is still running."""
         if self._process and self._process.poll() is None:
             self._process.terminate()
             try:
@@ -520,7 +547,7 @@ class RenderOrchestrator:
                 self._process.wait()
 
     def get_exit_code(self) -> Optional[int]:
-        """Devuelve el codigo de salida del proceso de Blender, o None si sigue corriendo."""
+        """Return the Blender process exit code, or None if it is still running."""
         if self._process is None:
             return None
         return self._process.poll()

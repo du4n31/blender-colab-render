@@ -1,7 +1,7 @@
-"""Gestion del archivo de estado para reanudacion de renders interrumpidos.
+"""Manage render checkpoints for resuming interrupted jobs.
 
-El archivo de estado se guarda en Drive (no en disco local) para que sobreviva
-entre sesiones de Colab.
+The state file is stored in Drive (not on local disk) so it persists
+between Colab sessions.
 """
 
 import json
@@ -11,11 +11,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from bcr.config import STATE_DIR_NAME, STATE_FILE_NAME
+from bcr.config import (
+    RENDERED_IMAGE_EXTENSIONS,
+    STATE_DIR_NAME,
+    STATE_FILE_NAME,
+    extract_frame_number,
+)
 
 
 class RenderState:
-    """Estado serializable de un trabajo de render."""
+    """Serializable state for a render job."""
 
     def __init__(
         self,
@@ -48,28 +53,25 @@ class RenderState:
 
 
 def _state_path(drive_path: Path) -> Path:
-    """Ruta completa al archivo de estado dentro de Drive."""
+    """Return the full path to the state file inside Drive."""
     return drive_path / STATE_DIR_NAME / STATE_FILE_NAME
 
 
 def save_state(
     drive_path: Path, last_frame: int, total_frames: int, backend=None
 ) -> RenderState:
-    """Guarda el estado del render en Drive.
-
-    Crea el directorio de estado si no existe.
+    """Save render state to Drive, creating the state directory if needed.
 
     Args:
-        drive_path: Ruta base de salida en Drive (o, si se pasa backend,
-            el folder_id de esa carpeta -- ver drive_backend.py).
-        last_frame: Ultimo frame completado.
-        total_frames: Total de frames del trabajo.
-        backend: Backend opcional (ej. ServiceAccountDriveBackend) para
-            guardar el estado via API en vez del filesystem montado.
-            Por defecto None -- comportamiento identico al actual.
+        drive_path: Drive output path, or the output folder ID when a backend
+            is supplied (see drive_backend.py).
+        last_frame: Last completed frame.
+        total_frames: Total number of frames in the job.
+        backend: Optional backend such as ServiceAccountDriveBackend for API
+            persistence instead of the mounted filesystem.
 
     Returns:
-        El objeto RenderState guardado.
+        The saved RenderState object.
     """
     if backend is not None:
         return backend.save_state(drive_path, last_frame, total_frames)
@@ -88,19 +90,16 @@ def save_state(
 
 
 def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
-    """Carga el ultimo frame confirmado desde el archivo de estado.
+    """Load the last confirmed frame from the state file.
 
     Args:
-        drive_path: Ruta base de salida en Drive (o folder_id si se pasa
-            backend).
-        total_frames: Total de frames esperado para este trabajo.
-        backend: Backend opcional para leer el estado via API. Por
-            defecto None -- comportamiento identico al actual.
+        drive_path: Drive output path, or folder ID when a backend is supplied.
+        total_frames: Expected number of frames for this job.
+        backend: Optional backend for reading state through the Drive API.
 
     Returns:
-        El ultimo frame completado (0 si no hay estado previo).
-        Si total_frames cambio (nuevo trabajo con distinta duracion),
-        se ignora el estado previo.
+        The last completed frame (0 when no prior state exists). A checkpoint
+        from a job with a different frame count is ignored.
     """
     if backend is not None:
         return backend.load_state(drive_path, total_frames)
@@ -115,7 +114,7 @@ def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
             data = json.load(f)
         state = RenderState.from_dict(data)
 
-        # Si el total de frames cambio, el estado previo no es valido
+        # Ignore checkpoints from jobs with a different frame count.
         if state.total_frames != total_frames:
             return 0
 
@@ -124,56 +123,44 @@ def load_state(drive_path: Path, total_frames: int, backend=None) -> int:
         return 0
 
 
-def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None) -> int:
-    """Reconcilia el ultimo frame contra los archivos realmente presentes en Drive.
+def reconcile_with_files(drive_path: Path, state_last_frame: int, backend=None, frame_start: int = 1) -> int:
+    """Return the last contiguous frame confirmed by stored image files.
 
-    Usa el valor mas conservador (menor) entre el estado y los archivos
-    fisicos, por si el archivo de estado quedo desactualizado por una
-    caida a mitad de escritura.
-
-    Args:
-        drive_path: Ruta de salida en Drive (o folder_id si se pasa
-            backend).
-        state_last_frame: Ultimo frame segun el archivo de estado.
-        backend: Backend opcional para listar frames via API. Por
-            defecto None -- comportamiento identico al actual.
-
-    Returns:
-        El ultimo frame confirmado (0 si no hay frames).
+    state_last_frame is retained for API compatibility, but the files are
+    authoritative because checkpoints can be stale or ahead of durable output.
+    The sentinel frame_start - 1 means no contiguous frame is present.
     """
     if backend is not None:
         frames_on_disk = backend.list_frame_numbers(drive_path)
     else:
         frames_on_disk = _list_frame_numbers(drive_path)
 
-    if not frames_on_disk:
-        return 0
+    ordered = sorted(set(frames_on_disk))
+    if not ordered:
+        return frame_start - 1
 
-    max_on_disk = max(frames_on_disk)
-    return min(state_last_frame, max_on_disk)
-
+    # Never skip a missing frame after a partially completed parallel upload.
+    contiguous_last = frame_start - 1
+    for frame_number in ordered:
+        if frame_number < frame_start:
+            continue
+        if frame_number != contiguous_last + 1:
+            break
+        contiguous_last = frame_number
+    # Actual image files are authoritative; a missing or stale checkpoint must not disable resume.
+    return contiguous_last
 
 def _list_frame_numbers(drive_path: Path) -> list[int]:
-    """Lista los numeros de frame de archivos frame_NNNNNN.* en drive_path.
-
-    Busca recursivamente en subdirectorios (para frames organizados
-    por nodo File Output). Soporta .png y .exr.
-    """
+    """Find frame numbers in rendered images, including compositor subfolders."""
     if not drive_path.exists():
         return []
 
-    frames: list[int] = []
+    frames: set[int] = set()
     for root, _dirs, files in os.walk(str(drive_path)):
         for entry in files:
-            if entry.startswith("frame_") and (
-                entry.endswith(".png") or entry.endswith(".exr")
-            ):
-                base = entry.replace(".png", "").replace(".exr", "")
-                parts = base.split("_")
-                if len(parts) >= 2:
-                    num_part = parts[-1]
-                    try:
-                        frames.append(int(num_part))
-                    except ValueError:
-                        continue
+            if Path(entry).suffix.lower() not in RENDERED_IMAGE_EXTENSIONS:
+                continue
+            frame_number = extract_frame_number(entry)
+            if frame_number is not None:
+                frames.add(frame_number)
     return sorted(frames)

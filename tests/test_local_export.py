@@ -1,6 +1,6 @@
-"""Pruebas para local_export.py.
+"""Tests for local_export.py.
 
-Validan empaquetado en .zip, descarga local y verificacion de espacio en disco.
+Validate ZIP packaging, local download, and disk-space checks.
 """
 
 import shutil
@@ -20,7 +20,7 @@ from bcr.local_export import (
 
 
 class TestPackageOutput(unittest.TestCase):
-    """Prueba la funcion package_output."""
+    """Test package_output."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -71,7 +71,7 @@ class TestPackageOutput(unittest.TestCase):
 
 
 class TestTriggerDownload(unittest.TestCase):
-    """Prueba la funcion trigger_download."""
+    """Test trigger_download."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -105,7 +105,7 @@ class TestTriggerDownload(unittest.TestCase):
 
 
 class TestCheckDiskSpace(unittest.TestCase):
-    """Prueba la funcion check_disk_space."""
+    """Test check_disk_space."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -117,7 +117,7 @@ class TestCheckDiskSpace(unittest.TestCase):
         """Non-existent directory returns (False, message)."""
         ok, msg = check_disk_space(Path("/nonexistent_path_12345"), min_free_gb=2.0)
         self.assertFalse(ok)
-        self.assertIn("no existe", msg.lower())
+        self.assertIn("does not exist", msg.lower())
 
     @patch("shutil.disk_usage")
     def test_sufficient_space_returns_true(
@@ -137,5 +137,5 @@ class TestCheckDiskSpace(unittest.TestCase):
         mock_disk_usage.return_value = MagicMock(free=0.5 * 1024**3)
         ok, msg = check_disk_space(self._tmpdir, min_free_gb=2.0)
         self.assertFalse(ok)
-        self.assertIn("insuficiente", msg.lower())
+        self.assertIn("insufficient", msg.lower())
         self.assertIn("GB", msg)

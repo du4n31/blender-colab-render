@@ -1,4 +1,4 @@
-"""Pruebas para state_manager.py."""
+"""Tests for state_manager.py."""
 
 import json
 from pathlib import Path
@@ -15,7 +15,7 @@ from bcr.state_manager import (
 
 
 class TestRenderState:
-    """Pruebas del modelo RenderState."""
+    """Tests for the RenderState model."""
 
     def test_to_dict(self):
         state = RenderState(last_frame=5, total_frames=100)
@@ -38,27 +38,27 @@ class TestRenderState:
 
 
 class TestSaveLoadState:
-    """Pruebas de persistencia del estado."""
+    """Tests for state persistence."""
 
     def test_save_and_load(self, tmp_drive_dir: Path):
-        """Guardar y cargar estado funciona correctamente."""
+        """Saving and loading state works correctly."""
         save_state(tmp_drive_dir, last_frame=42, total_frames=250)
         result = load_state(tmp_drive_dir, total_frames=250)
         assert result == 42
 
     def test_load_no_state_file(self, tmp_drive_dir: Path):
-        """Sin archivo de estado, devuelve 0."""
+        """Return 0 when no state file exists."""
         result = load_state(tmp_drive_dir, total_frames=100)
         assert result == 0
 
     def test_load_different_total_frames(self, tmp_drive_dir: Path):
-        """Si total_frames cambio, se ignora el estado previo."""
+        """Ignore the previous checkpoint when total_frames changes."""
         save_state(tmp_drive_dir, last_frame=30, total_frames=100)
         result = load_state(tmp_drive_dir, total_frames=200)
         assert result == 0
 
     def test_state_file_created(self, tmp_drive_dir: Path):
-        """El archivo de estado se crea en la ruta correcta."""
+        """The state file is created at the expected path."""
         save_state(tmp_drive_dir, last_frame=1, total_frames=10)
         state_file = tmp_drive_dir / "_estado" / "render_state.json"
         assert state_file.exists()
@@ -66,14 +66,14 @@ class TestSaveLoadState:
         assert data["last_frame"] == 1
 
     def test_save_multiple_times(self, tmp_drive_dir: Path):
-        """Guardar multiples veces actualiza el archivo."""
+        """Saving multiple times updates the file."""
         save_state(tmp_drive_dir, last_frame=1, total_frames=10)
         save_state(tmp_drive_dir, last_frame=5, total_frames=10)
         result = load_state(tmp_drive_dir, total_frames=10)
         assert result == 5
 
     def test_load_corrupted_state(self, tmp_drive_dir: Path):
-        """Archivo de estado corrupto devuelve 0."""
+        """A corrupted state file returns 0."""
         state_dir = tmp_drive_dir / "_estado"
         state_dir.mkdir(parents=True, exist_ok=True)
         state_file = state_dir / "render_state.json"
@@ -83,38 +83,71 @@ class TestSaveLoadState:
 
 
 class TestReconcileWithFiles:
-    """Pruebas de reconciliacion contra archivos reales."""
+    """Tests reconciliation against actual output files."""
 
     def test_no_files_returns_zero(self, tmp_drive_dir: Path):
-        """Sin archivos en Drive, devuelve 0."""
+        """Return the no-frame sentinel when Drive contains no files."""
         result = reconcile_with_files(tmp_drive_dir, state_last_frame=10)
         assert result == 0
 
+    def test_empty_output_with_frame_start_zero_returns_sentinel(self, tmp_drive_dir: Path):
+        """An empty output directory must not imply that frame zero is complete."""
+        result = reconcile_with_files(
+            tmp_drive_dir, state_last_frame=0, frame_start=0
+        )
+        assert result == -1
+
+    def test_non_default_frame_start(self, tmp_drive_dir: Path):
+        """Resume reconciliation supports ranges that start above frame one."""
+        (tmp_drive_dir / "frame_000010.png").touch()
+        (tmp_drive_dir / "frame_000011.png").touch()
+        (tmp_drive_dir / "frame_000013.png").touch()
+        result = reconcile_with_files(
+            tmp_drive_dir, state_last_frame=13, frame_start=10
+        )
+        assert result == 11
+
+    def test_frame_zero_is_detected(self, tmp_drive_dir: Path):
+        """Frame zero is a valid rendered frame when explicitly requested."""
+        (tmp_drive_dir / "frame_000000.png").touch()
+        result = reconcile_with_files(
+            tmp_drive_dir, state_last_frame=0, frame_start=0
+        )
+        assert result == 0
+
+    def test_non_image_assets_with_frame_numbers_are_ignored(self, tmp_drive_dir: Path):
+        """Scene files and scripts with six-digit names are not rendered frames."""
+        (tmp_drive_dir / "scene_000001.blend").touch()
+        (tmp_drive_dir / "script_000002.py").touch()
+        (tmp_drive_dir / "frame_000003.png").touch()
+        result = reconcile_with_files(tmp_drive_dir, state_last_frame=3)
+        assert result == 0
+
     def test_state_ahead_of_files(self, tmp_drive_dir: Path):
-        """Si el estado dice frame 10 pero solo hay hasta 5, usa 5."""
+        """If the checkpoint says frame 10 but files only reach frame 5, use 5."""
         for i in range(1, 6):
             (tmp_drive_dir / f"frame_{i:06d}.png").touch()
         result = reconcile_with_files(tmp_drive_dir, state_last_frame=10)
         assert result == 5
 
     def test_files_ahead_of_state(self, tmp_drive_dir: Path):
-        """Si hay archivos hasta 10 pero el estado dice 5, usa 5."""
+        """Verified contiguous files remain usable when the checkpoint is stale."""
         for i in range(1, 11):
             (tmp_drive_dir / f"frame_{i:06d}.png").touch()
         result = reconcile_with_files(tmp_drive_dir, state_last_frame=5)
-        assert result == 5
+        assert result == 10
 
     def test_mixed_file_types(self, tmp_drive_dir: Path):
-        """Archivos que no son frame_* se ignoran."""
+        """Compositor-style names are recognized and frame gaps are not skipped."""
         (tmp_drive_dir / "frame_000001.png").touch()
         (tmp_drive_dir / "frame_000003.png").touch()
         (tmp_drive_dir / "README.txt").touch()
         (tmp_drive_dir / "output.exr").touch()
         result = reconcile_with_files(tmp_drive_dir, state_last_frame=10)
-        assert result == 3
+        assert result == 1
 
     def test_exr_files_detected(self, tmp_drive_dir: Path):
-        """Archivos .exr con nombre frame_* son detectados."""
+        """Detect .exr files whose names use the frame_* pattern."""
         (tmp_drive_dir / "frame_000001.exr").touch()
         (tmp_drive_dir / "frame_000002.exr").touch()
         (tmp_drive_dir / "log.txt").touch()
@@ -122,7 +155,7 @@ class TestReconcileWithFiles:
         assert result == 2
 
     def test_frames_in_subdirectories(self, tmp_drive_dir: Path):
-        """Frames en subdirectorios (organizados por nodo) son detectados."""
+        """Detect frames in subdirectories organized by compositor node."""
         subdir = tmp_drive_dir / "Temp"
         subdir.mkdir()
         (subdir / "frame_000001.exr").touch()
@@ -132,7 +165,7 @@ class TestReconcileWithFiles:
 
 
 class TestBackendDelegation:
-    """Cuando se pasa un backend, se delega en el en vez de usar el filesystem."""
+    """Delegate to the supplied backend instead of using the local filesystem."""
 
     def test_save_state_delegates_to_backend(self):
         backend = Mock()
