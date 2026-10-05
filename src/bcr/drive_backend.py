@@ -43,7 +43,7 @@ class ServiceAccountDriveBackend:
     def __init__(self, service, root_folder_id: str):
         self._service = service
         self._root_folder_id = root_folder_id
-        # Cache de rutas relativas ya resueltas -> folder_id, para no
+        # Cache resolved relative paths -> folder_id so repeated lookups do not
         # repetir busquedas en cada frame.
         self._folder_cache: dict[str, str] = {"": root_folder_id}
 
@@ -98,7 +98,7 @@ class ServiceAccountDriveBackend:
         except ImportError as exc:
             msg = (
                 "Faltan las librerias google-auth / google-api-python-client. "
-                "Instalalas con pip antes de usar este backend."
+                "Install them with pip before using this backend."
             )
             raise DriveBackendError(msg) from exc
 
@@ -155,7 +155,7 @@ class ServiceAccountDriveBackend:
 
         Returns:
             The final folder_id (str). Pass it wherever
-            drive_sync/state_manager esperan un Path -- este backend solo
+            drive_sync/state_manager expect a Path-like location; this backend only
             the ID string is needed; it is never treated as a filesystem path.
         """
         relative_path = relative_path.strip("/")
