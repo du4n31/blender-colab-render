@@ -189,7 +189,7 @@ class TestBuildCommand:
         )
         cmd = orch.build_command()
 
-        # No debe contener --render-format ni --use-extension
+        # Must not contain --render-format or --use-extension
         assert "--render-format" not in cmd
         assert "--use-extension" not in cmd
 
@@ -327,7 +327,7 @@ class TestParseSavedLine:
                 frame_num, path = result
                 frames.append(frame_num)
                 paths.append(str(path))
-        # Solo los EXR, no el discard
+        # Only EXR files, not disposable output
         assert frames == [1, 1]
         assert paths == [
             "/content/render_tmp/beauty_000001.exr",
@@ -341,7 +341,7 @@ class TestParseSavedLine:
         El filtrado de paths invalidos ocurre en _is_valid_output_path (en run()),
         no en el parseo.
         """
-        # Usar un patron que SÍ se pueda parsear (underscore + digitos + .ext)
+        # Use a parseable pattern: underscore + digits + extension
         line = "Saved: 'C:\\\\Users\\\\artista\\\\Documents\\\\file_name_000001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
@@ -601,7 +601,7 @@ class TestDriveBackendDispatch(unittest.TestCase):
 
         mock_upload.assert_called_once_with(local_file, orch.drive_output_dir, 1, "")
         mock_save_state.assert_called_once()
-        # save_state se llamo sin backend (None), el default
+        # save_state is called with the default backend value (None)
         self.assertIsNone(mock_save_state.call_args.kwargs.get("backend"))
 
     def test_upload_and_cleanup_uses_backend_when_provided(self) -> None:
@@ -613,11 +613,11 @@ class TestDriveBackendDispatch(unittest.TestCase):
         with patch("bcr.render_orchestrator.upload_frame") as mock_upload:
             orch._upload_and_cleanup(local_file, frame_num=1)
 
-        # el modulo drive_sync.upload_frame NO se llama cuando hay backend
+        # drive_sync.upload_frame is bypassed when a backend is supplied
         mock_upload.assert_not_called()
         backend.upload_frame.assert_called_once_with(local_file, orch.drive_output_dir, 1, "")
         backend.save_state.assert_called_once()
-        # el archivo local se borro igual, sin importar el backend
+        # the local file is still removed regardless of backend implementation
         self.assertFalse(local_file.exists())
 
     def test_upload_and_cleanup_catches_backend_error(self) -> None:
@@ -629,10 +629,10 @@ class TestDriveBackendDispatch(unittest.TestCase):
         local_file = self._tmpdir / "frame_000001.png"
         local_file.write_bytes(b"x")
 
-        # no debe propagar la excepcion -- se atrapa y se loguea, igual que DriveSyncError
+        # the exception is logged rather than propagated, matching DriveSyncError behavior
         orch._upload_and_cleanup(local_file, frame_num=1)
 
-        # como fallo la subida, el archivo local NO se borra
+        # because the upload failed, the local file is not removed
         self.assertTrue(local_file.exists())
 
 
