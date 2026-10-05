@@ -98,12 +98,12 @@ class RenderOrchestrator:
     def build_command(self) -> list[str]:
         """Build the Blender argument list in the correct order.
 
-        El orden critical (ver docs de Blender):
+        Critical ordering (see Blender CLI documentation):
             1. --background
             2. blend file (after the .blend file, --render-output is not overwritten)
             3. motor, python scripts, output
-            4. render trigger (--render-anim o --render-frame) # LAST
-            5. -- seguido de opciones de Cycles
+            4. render trigger (--render-anim or --render-frame)  # LAST
+            5. -- followed by Cycles options
         """
         cmd: list[str] = [
             str(self.blender_path),
@@ -116,7 +116,7 @@ class RenderOrchestrator:
         driver_script = self.blender_scripts_dir / "render_frame_driver.py"
         cmd.extend(["--python", str(driver_script)])
 
-        # Scripts personalizados adicionales
+        # Additional custom scripts
         for script_path in self.custom_script_paths:
             cmd.extend(["--python", str(script_path)])
 
@@ -138,7 +138,7 @@ class RenderOrchestrator:
             cmd.extend(["--frame-end", str(self.frame_end)])
             cmd.append("--render-anim")
 
-        # Opciones de Cycles (despues de --)
+        # Cycles options (after --)
         cmd.append("--")
         cmd.extend(["--cycles-device", self.device])
         cmd.extend(["--output-mode", self.output_mode])
@@ -427,7 +427,7 @@ class RenderOrchestrator:
             time.sleep(2)
 
     # ------------------------------------------------------------------
-    # Metricas
+    # Metrics
     # ------------------------------------------------------------------
 
     def _update_metrics(self) -> None:
@@ -451,7 +451,7 @@ class RenderOrchestrator:
         else:
             self._avg_time = None
 
-        # Notificar
+        # Notify
         if self.progress_callback:
             remaining = self._requested_frame_end - self._current_frame
             eta = None
@@ -468,7 +468,7 @@ class RenderOrchestrator:
             )
 
     # ------------------------------------------------------------------
-    # Finalizacion zip_download
+    # zip_download finalization
     # ------------------------------------------------------------------
 
     def _finalize_zip_download(self) -> None:
@@ -494,7 +494,7 @@ class RenderOrchestrator:
             )
 
     # ------------------------------------------------------------------
-    # Reconciliacion y limpieza
+    # Reconciliation and cleanup
     # ------------------------------------------------------------------
 
     def _reconcile_pending(self) -> None:
@@ -507,7 +507,7 @@ class RenderOrchestrator:
 
         # Upload any local frames that have not yet been uploaded
         # Use rglob to find files in subdirectories (File Output
-        # nodes remapeados pueden crear subdirectorios en output_dir).
+        # remapped nodes can create subdirectories under output_dir).
         if self.output_dir.exists():
             for f in sorted(self.output_dir.rglob("*")):
                 if not f.is_file():
