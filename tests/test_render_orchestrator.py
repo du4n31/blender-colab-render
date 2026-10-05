@@ -113,7 +113,7 @@ class TestBuildCommand:
         assert idx_device > idx_ddash
 
     def test_custom_scripts_included(self):
-        """Scripts personalizados se anaden como --python."""
+        """Custom scripts are appended as --python arguments."""
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
             blend_file=Path("/s.blend"),
@@ -134,7 +134,7 @@ class TestBuildCommand:
         assert "/scripts/custom2.py" in cmd
 
     def test_device_and_output_mode_after_ddash(self):
-        """--cycles-device, --output-mode y --output-dir van despues de --."""
+        """--cycles-device, --output-mode, and --output-dir follow --."""
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
             blend_file=Path("/s.blend"),
@@ -165,7 +165,7 @@ class TestBuildCommand:
         assert cmd[outdir_idx + 1] == "/tmp/r"
 
     def test_output_has_render_output(self):
-        """Verifica --render-output para la salida directa del render."""
+        """Verify --render-output for direct render output."""
         orch = RenderOrchestrator(
             blender_path=Path("/blender"),
             blend_file=Path("/s.blend"),
@@ -199,7 +199,7 @@ class TestParseSavedLine:
 
     Ahora _parse_saved_line devuelve tuple (frame_num, Path) con la
     the exact path reported by Blender, to support multiple
-    archivos por frame (varios File Output nodes).
+    files per frame (multiple File Output nodes).
     """
 
     def test_saved_line_standard(self):
@@ -267,7 +267,7 @@ class TestParseSavedLine:
         assert result is None
 
     def test_saved_exr_standard(self):
-        """Linea Saved: con archivo EXR (File Output node)."""
+        """Parse a Saved: line for an EXR File Output node."""
         line = "Saved: '/content/render_tmp/File_Output_node000001.exr'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is not None
@@ -294,7 +294,7 @@ class TestParseSavedLine:
         assert str(path) == "/content/render_tmp/beauty_000128.exr"
 
     def test_discard_file_ignored(self):
-        """Archivos _discard_ o _render_result_ se ignoran (salida directa)."""
+        """Ignore _discard_ and _render_result_ files from direct output."""
         line = "Saved: '/content/render_tmp/_discard_0001.png'"
         result = RenderOrchestrator._parse_saved_line(line)
         assert result is None
@@ -335,7 +335,7 @@ class TestParseSavedLine:
         ]
 
     def test_windows_path_still_parsed(self):
-        """Rutas Windows se parsean como tuple aunque luego se filtran.
+        """Windows paths parse as tuples even if they are filtered later.
 
         _parse_saved_line extrae el frame de cualquier path con patron valido.
         El filtrado de paths invalidos ocurre en _is_valid_output_path (en run()),
@@ -416,7 +416,7 @@ class TestComputeSubdir:
         )
 
     def test_file_in_subdirectory(self, tmp_output_dir: Path):
-        """Archivo en subdirectorio -> nombre del subdirectorio."""
+        """A nested file maps to its subdirectory name."""
         orch = self.make_orch(tmp_output_dir)
         path = tmp_output_dir / "Temp" / "beauty_0001.exr"
         assert orch._compute_subdir(path) == "Temp"
@@ -428,20 +428,20 @@ class TestComputeSubdir:
         assert orch._compute_subdir(path) == "Temp/beauty"
 
     def test_file_direct_in_output_dir(self, tmp_output_dir: Path):
-        """Archivo directamente en output_dir -> string vacio."""
+        """A file directly under output_dir maps to an empty subdirectory."""
         orch = self.make_orch(tmp_output_dir)
         path = tmp_output_dir / "frame_00001.png"
         assert orch._compute_subdir(path) == ""
 
     def test_file_outside_output_dir(self, tmp_output_dir: Path):
-        """Archivo fuera de output_dir -> string vacio."""
+        """A file outside output_dir maps to an empty subdirectory."""
         orch = self.make_orch(tmp_output_dir)
         path = Path("/tmp/unrelated/file.exr")
         assert orch._compute_subdir(path) == ""
 
 
 class TestOutputTarget(unittest.TestCase):
-    """Prueba el parametro output_target de RenderOrchestrator."""
+    """Test the RenderOrchestrator output_target parameter."""
 
     def test_default_output_target_is_drive(self) -> None:
         """Default output_target is 'drive'."""
@@ -488,7 +488,7 @@ class TestOutputTarget(unittest.TestCase):
 
 
 class TestFinalizeZipDownload(unittest.TestCase):
-    """Prueba _finalize_zip_download en modo zip_download."""
+    """Test _finalize_zip_download in zip_download mode."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -563,7 +563,7 @@ class TestFinalizeZipDownload(unittest.TestCase):
 
 
 class TestDriveBackendDispatch(unittest.TestCase):
-    """Prueba que drive_backend (opcional) se use en vez de drive_sync/state_manager."""
+    """Test that optional drive_backend replaces drive_sync/state_manager calls."""
 
     def setUp(self) -> None:
         self._tmpdir = Path(tempfile.mkdtemp())
@@ -624,7 +624,7 @@ class TestDriveBackendDispatch(unittest.TestCase):
         from bcr.drive_backend import DriveBackendError
 
         backend = MagicMock()
-        backend.upload_frame.side_effect = DriveBackendError("carpeta no accesible")
+        backend.upload_frame.side_effect = DriveBackendError("folder is not accessible")
         orch = self._make_orch(drive_backend=backend)
         local_file = self._tmpdir / "frame_000001.png"
         local_file.write_bytes(b"x")
