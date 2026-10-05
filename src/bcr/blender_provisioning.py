@@ -15,7 +15,6 @@ from typing import Optional
 import requests
 
 from bcr.config import (
-    BLENDER_BINARY_RELATIVE,
     BLENDER_DEFAULT_VERSION,
     BLENDER_RELEASE_BASE,
     CHUNK_SIZE,
@@ -79,7 +78,7 @@ def get_blender_path(
         tar.extractall(path=str(extract_dir))
 
     # 3. Locate the Blender binary
-    blender_bin = _find_blender_binary(extract_dir)
+    blender_bin = _find_blender_binary(extract_dir, version)
     if not blender_bin:
         msg = f"Blender binary was not found in {extract_dir}"
         raise BlenderProvisioningError(msg)
@@ -108,20 +107,18 @@ def _download_file(url: str, dest: Path) -> None:
         raise BlenderProvisioningError(msg)
 
 
-def _find_blender_binary(extract_dir: Path) -> Optional[Path]:
-    """Find the Blender binary inside the extracted directory."""
-    # Check the known relative path first
-    candidate = extract_dir / BLENDER_BINARY_RELATIVE
-    if candidate.exists():
+def _find_blender_binary(extract_dir: Path, version: str) -> Optional[Path]:
+    """Find an executable Blender binary inside the extracted directory."""
+    # Blender archives use a version-specific top-level directory.
+    candidate = extract_dir / f"blender-{version}-linux-x64" / "blender"
+    if candidate.is_file() and os.access(str(candidate), os.X_OK):
         return candidate
 
-    # Fallback: search recursively
+    # Fallback: search recursively for an executable named "blender".
     for root, _dirs, files in os.walk(str(extract_dir)):
-        for fname in files:
-            if fname == "blender" and not os.access(
-                os.path.join(root, fname), os.X_OK
-            ):
-                full = Path(root) / fname
+        if "blender" in files:
+            full = Path(root) / "blender"
+            if full.is_file() and os.access(str(full), os.X_OK):
                 return full
     return None
 
