@@ -35,7 +35,7 @@ def get_blender_path(
     """Download (or copy from cache), extract Blender, and return its binary path.
 
     Args:
-        version: Version semantica de Blender (ej. "5.2.0").
+        version: Blender semantic version (for example, "5.2.0").
         cache_dir: Drive directory used to cache the .tar.xz archive.
                    If omitted, the archive is downloaded directly.
 
@@ -78,7 +78,7 @@ def get_blender_path(
     with tarfile.open(str(tar_path), "r:xz") as tar:
         tar.extractall(path=str(extract_dir))
 
-    # 3. Localizar binario
+    # 3. Locate the Blender binary
     blender_bin = _find_blender_binary(extract_dir)
     if not blender_bin:
         msg = f"Blender binary was not found in {extract_dir}"
@@ -154,7 +154,7 @@ def fetch_available_versions(min_major: int = 5) -> list[str]:
     el parche exacto.
 
     Returns:
-        Semantic versions sorted in descending order (ej. ["5.3.0", "5.2.0", ...]).
+        Semantic versions sorted in descending order (for example, ["5.3.0", "5.2.0", ...]).
 
     Raises:
         BlenderProvisioningError: if the connection fails and no versions are found.
@@ -214,7 +214,7 @@ def resolve_blender_version(preferred: Optional[str] = None) -> str:
     except BlenderProvisioningError:
         print(
             "[blender] WARNING: Could not fetch Blender versions live from "
-            f"live; using the default version"
+            "Blender release index; using the default version"
         )
         return preferred or BLENDER_DEFAULT_VERSION
 
