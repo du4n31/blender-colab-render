@@ -1,7 +1,7 @@
 """Configure the render device (GPU/CPU/OptiX) inside Blender.
 
 This script is designed to run INSIDE Blender's embedded Python runtime
-via blender --python device_config.py. Usa solo bpy + stdlib.
+via blender --python device_config.py. Uses only bpy + the standard library.
 """
 
 import sys
@@ -78,7 +78,7 @@ def _enable_gpu_devices(cprefs, backend: str) -> None:
 def parse_device_args(argv: list[str]) -> tuple[Optional[str], Optional[str]]:
     """Parse `--cycles-device` and `--output-mode` from sys.argv.
 
-    Los argumentos personalizados llegan despues de `--` en la linea de comandos
+    Custom arguments arrive after `--` on the command line
     de Blender.
 
     Returns:
