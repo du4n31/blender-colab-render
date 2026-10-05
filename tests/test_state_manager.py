@@ -147,7 +147,7 @@ class TestReconcileWithFiles:
         assert result == 1
 
     def test_exr_files_detected(self, tmp_drive_dir: Path):
-        """Archivos .exr con nombre frame_* son detectados."""
+        """Detect .exr files whose names use the frame_* pattern."""
         (tmp_drive_dir / "frame_000001.exr").touch()
         (tmp_drive_dir / "frame_000002.exr").touch()
         (tmp_drive_dir / "log.txt").touch()
