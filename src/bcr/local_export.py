@@ -1,7 +1,7 @@
 """Local ZIP packaging and download for zip_download mode.
 
 Like drive_sync.py, but packages frames locally instead of uploading each frame to Drive.
-incrementalmente, los mantiene locales y los empaqueta en un solo .zip.
+incrementally; it keeps them local and packages them into a single .zip archive.
 """
 
 import shutil
