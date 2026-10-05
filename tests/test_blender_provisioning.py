@@ -1,12 +1,16 @@
 """Pruebas para blender_provisioning.py: fetch_available_versions y resolve_blender_version."""
 
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import requests
 
 from bcr.blender_provisioning import (
     BlenderProvisioningError,
+    _find_blender_binary,
     fetch_available_versions,
     resolve_blender_version,
 )
@@ -39,6 +43,36 @@ def _make_side_effect(
         return _mock_html_response(html)
 
     return side_effect
+
+
+class TestFindBlenderBinary(unittest.TestCase):
+    """Tests for version-specific Blender binary discovery."""
+
+    def test_finds_binary_for_selected_version(self) -> None:
+        """The selected patch version must be used when locating Blender."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            binary = root / "blender-5.2.2-linux-x64" / "blender"
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b"#!/bin/sh\n")
+            binary.chmod(binary.stat().st_mode | 0o111)
+
+            result = _find_blender_binary(root, "5.2.2")
+
+            self.assertEqual(result, binary)
+
+    def test_ignores_non_executable_blender_file(self) -> None:
+        """A non-executable file named blender must not be selected."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            binary = root / "blender-5.2.2-linux-x64" / "blender"
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(b"not executable")
+            binary.chmod(binary.stat().st_mode & ~0o111)
+
+            result = _find_blender_binary(root, "5.2.2")
+
+            self.assertIsNone(result)
 
 
 # ---------------------------------------------------------------------------
